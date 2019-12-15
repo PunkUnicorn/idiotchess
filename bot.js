@@ -302,9 +302,9 @@ setTimeout(function () {
     http.createServer(function (request, response) {
         response.writeHead(200, { 'Content-Type': 'text/plain' });
         response.end('This bot is now woke\n');    
-    }).listen(8081);
+    }).listen(80);
 
     // Console will print the message
     console.log('Server running at http://127.0.0.1:8081/');
-}, 200);
+}, 1000 );
 
