@@ -11,7 +11,7 @@ catch (error) {
     auth = null;
 }
 
-if (auth == null) {
+if (auth === null) {
     auth = require('./auth.json');
 }
 
@@ -32,12 +32,42 @@ function makeGameKey(userID, targetid, channelID) {
     return [userID.toString(), targetid.toString(), channelID.toString()].join();
 }
 
+function isGameDataObj(gameDataObj) {
+    return typeof gameDataObj.games !== 'undefined';
+}
+
+function isGameInstanceObj(gameInstanceObj) {
+    return typeof gameInstanceObj.scorewhite !== 'undefined';
+}
+
 function gameInstance_isPlaying() {
-    if (typeof this.scorewhite === 'undefined') { throw 'wut? gameInstance_isPlaying() function expected to be called from a gameInstance object'; }
+    if (!isGameInstanceObj(this)) { throw 'wut? gameInstance_isPlaying() function expected to be called from a gameInstance object'; }
     var game = this;
 
+    return (game.playerwhite !== null && game.playerblack !== null);
+}
+
+function gameData_isPlayer(userID) {
+    if (!isGameDataObj(this)) { throw 'wut? gameData_isPlayer() function expected to be called from a gameData object'; }
+
+    if (game.playerwhite !== null && this.playerwhite === userID)
+        return true;
+
+    if (game.playerblack !== null && this.playerblack === userID)
+        return true;
 
     return false;
+}
+
+function gameData_getGames() {
+    return gameData.games;
+}
+
+function gameData_getGamesForUser(userID) {
+    return gameData.games
+        .filter(f => f.playerwhite !== null)
+        .filter(f => f.playerblack !== null)
+        .filter(f => f.playerwhite === userID || f.playerblack === userID);
 }
 
 function makeGameData() {
@@ -45,7 +75,7 @@ function makeGameData() {
 }
 
 function makeGameInstance() {
-    return { scorewhite: 0, scoreblack: 0, isPlaying: gameInstance_isPlaying };
+    return { scorewhite: 0, scoreblack: 0, playerwhite: null, playerblack: null, isPlaying: gameInstance_isPlaying };
 }
 
 function isValidNewGame(bot, gameData, channelID, userID, target) {
@@ -80,16 +110,16 @@ function getExistingGame(bot, gameData, userID, channelID) {
 }
 
 function getMoveDataFromMessage(bot, gameInfo, userID, channelID, message, others) {
+    console.log(message);
     const decodeMe = message
-        .replace(bot.id, '')
-        .split(' ');
+        .replace( /\<\@\![0-9]+\>/g, '') // remove mentions tags
+        .split(' ')
+        .filter(f => f.length > 0);
 
-    var verb = 'newgame';
-    if (gameInfo.isPlaying()) { // if game already in play the default verb is 'move'
-        verb = 'move'
-    }
+    console.log(decodeMe);
 
-    //console.log(others[0]);
+    var verb = '';
+
     var target = others[0];//only one mention is acknoledged 
     var boardinfo = [];
     var whitePlayer = null, blackPlayer = null;
@@ -104,16 +134,10 @@ function getMoveDataFromMessage(bot, gameInfo, userID, channelID, message, other
             .replace(/(\?)/g, '')
             .replace(/(\.)/g, '');
 
+        if (cleantoken.length == 0)
+            return;
+        
         console.log('cleant', cleantoken);
-
-        /****
-         * If the command is 'move' then extra message text is gathered because it has the fucking move data.
-         * e.g.move e2 to e4, boardInfo becomes ['e2', 'to', 'e4'] 
-         *
-         ****/
-        if (verb === 'move') {
-            boardinfo.push(token);
-        }
 
         if (isTakeBack) {
             boardInfo.push(token);
@@ -146,15 +170,27 @@ function getMoveDataFromMessage(bot, gameInfo, userID, channelID, message, other
 
                 case 'cancel':
                     verb = cleantoken;
+                    break;
+
+                default:
+                    boardinfo.push(token);
+                    break;
             }
+        }
+
+        if (verb.length === 0) {
+            // if game already in play the default verb is 'move'
+            verb = gameInfo.isPlaying() ? 'move' : 'newgame';
         }
 
         // for newgames, see if the player side colour has been specified
         if (verb === 'newgame') {
             if (token === 'black') {
-                whitePlayer = userID;
-            } else if (token === 'white') {
+                whitePlayer = target.id;
                 blackPlayer = userID;
+            } else if (token === 'white') {
+                whitePlayer = userID;
+                blackPlayer = target.id;
             }
         }
 
@@ -252,59 +288,43 @@ function processVerb(bot, gameData, channelID, userID, moveObjs) {
 }
 
 bot.on('message', function (user, userID, channelID, message, evt) {
-    const me = evt.d.mentions.filter(m => m.id == bot.id);
+    const botMentions = evt.d.mentions.filter(m => m.id === bot.id);
 
     // if this function is not applicable then get out of here ASAP, and don't clog up the indenting on your way out
-    if (typeof me === 'undefined' || me === null || me.length === 0) {
+    if (typeof botMentions === 'undefined' || botMentions === null || botMentions.length === 0) {
         return;
     }
 
-    const others = evt.d.mentions.filter(m => m.id != bot.id);
+    const otherMentions
+        = evt.d.mentions
+            .filter(m => m.id !== bot.id && m.id != userID);
 
     const possibleExistingGameForThisUserInThisChannel = getExistingGame(bot, gameData, userID, channelID);
 
-    const moveObjs = getMoveDataFromMessage(bot, possibleExistingGameForThisUserInThisChannel, userID, channelID, message, others);
+    const moveObjs = getMoveDataFromMessage(bot, possibleExistingGameForThisUserInThisChannel, userID, channelID, message, otherMentions);
 
-    //console.log('mid', me, others, possibleExistingGameForThisUserInThisChannel, moveObjs);
     if (moveObjs !== null) {
         processVerb(bot, gameData, channelID, userID, moveObjs);
-        debugDump(bot, channelID, { verb: moveObjs.verb, target: moveObjs.target, boardinfo: moveObjs.boardinfo.join() });
+        var target = (typeof moveObjs.target !== 'undefined' && moveObjs.target !== null)
+            ? moveObjs.target
+            : { username:'' };
+
+        debugDump(bot, channelID, { verb: moveObjs.verb, target: target.username, boardinfo: moveObjs.boardinfo.join(), whitePlayer: moveObjs.whitePlayer, blackPlayer: moveObjs.blackPlayer });
     }
-    //    switch (moveObjs.verb) {
-    //        case 'newgame':
-    //            openGameNegociation(bot, gameData, channelID, userID, makeGameKey(userID, target[0].id, channelID), target[0].id);
-    //            //addGame(bot, gameData, makeGameKey(userID, target[0].id, channelID), playerw, playerb, new Chess());
-    //            break;
-
-    /* 
-            while (!chess.game_over()) {
-                  var moves = chess.moves();
-                  var move = moves[Math.floor(Math.random() * moves.length)];
-                  chess.move(move);
-                }
-                console.log(chess.pgn()); 
-    */
-
-    //        default:
-    //            break;
-    //    }
-
-    //    debugDump(bot, channelID, { verb: moveObjs.verb, target: moveObjs.target.join(), boardinfo: moveObjs.boardinfo.join() });
-    //bot.sendMessage({
-    //    to: channelID,
-    //    message: 'verb: ' + moveObjs.verb + ' target: ' + moveObjs.target.join() + ' boardinfo: ' + moveObjs.boardinfo.join()
-    //});
 });
 
-var http = require("http");
 
+var http = require("http");
 setTimeout(function () {
     http.createServer(function (request, response) {
         response.writeHead(200, { 'Content-Type': 'text/plain' });
         response.end('This bot is now woke\n');    
-    }).listen(80);
+
+        // DIAGNOSTIC CONSOLE???
+
+    }).listen(8081);
 
     // Console will print the message
-    console.log('Server running at http://127.0.0.1:8081/');
+    console.log('Server running at http://127.0.0.1:8081');
 }, 1000 );
 
