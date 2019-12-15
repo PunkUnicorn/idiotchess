@@ -21,10 +21,10 @@ steps:
 #    npm run build
   displayName: 'npm install'
 
-- task: CopyFiles@2
-  inputs:
-    Contents: '**'
-    TargetFolder: ./
+#- task: CopyFiles@2
+#  inputs:
+#    Contents: '**'
+#    TargetFolder: ./
     
 - task: ArchiveFiles@2
   inputs:
@@ -33,3 +33,5 @@ steps:
     archiveType: 'zip'
     archiveFile: '$(Build.ArtifactStagingDirectory)/$(Build.BuildId).zip'
     replaceExistingArchive: true
+
+- task: PublishBuildArtifacts@1
