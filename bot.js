@@ -7,6 +7,7 @@ const DiscordJs = require('discord.js');
 
 /* note these suit of functions to be promoted to own file and required('./...')'d in */
 function debugDump(bot, channelID, shitToDump) {
+    //console.log('debugDump', bot, channelID, shitToDump);
     bot.sendMessage({
         to: channelID,
         message: JSON.stringify(shitToDump)
@@ -21,8 +22,24 @@ function makeGameKey(userID, targetid, channelID) {
     return [ userID.toString(), targetid.toString(), channelID.toString() ].join();
 }
 
+function gameInstance_isPlaying() {
+    if (typeof this.scorewhite === 'undefined') {throw 'wut? gameInstance_isPlaying() function expected to be called from a gameInstance object';}
+    var game = this;
+
+
+    return false;
+}
+
 function makeGameData() {
     return { games: [/*playerw, playerb, moves: [], fen of current board? */] };
+}
+
+function makeGameInstance() {
+    return { scorewhite:0, scoreblack:0, isPlaying:gameInstance_isPlaying };
+}
+
+function isValidNewGame(bot, gameData, channelID, userID, target) {
+    return typeof target !== 'undefined';
 }
 
 function openGameNegociation(bot, gameData, channelID, challengerUserId, gameKey, targetID) {
@@ -45,11 +62,14 @@ function openGameNegociation(bot, gameData, channelID, challengerUserId, gameKey
 
 function getExistingGame(bot, gameData, userID, channelID) {
     // because we limit a user to one game per channel (*1), we can use the userID and channelID to get any existing running game
+    //   FIND EXISTING GAME IN gameData
 
     //return existing running game for userID and channelID
+    const newGame = makeGameInstance(bot, gameData);
+    return newGame;
 }
 
-function getMoveDataFromMessage(bot, gameInfo, message, others) {
+function getMoveDataFromMessage(bot, gameInfo, userID, channelID, message, others) {
     const decodeMe = message
         .replace(bot.id, '')
         .split(' ');
@@ -59,12 +79,13 @@ function getMoveDataFromMessage(bot, gameInfo, message, others) {
         verb = 'move'
     }
 
-    console.log(others[0]);
-    var target = others.map(f => f.username);
+    //console.log(others[0]);
+    var target = others[0];//only one mention is acknoledged 
     var boardinfo = [];
     var whitePlayer = null, blackPlayer = null;
     var isTakeBack = false;
 
+    var prevTokens = [];
     var prevToken = null;
     decodeMe.forEach(token => {
         const cleantoken = token
@@ -84,35 +105,39 @@ function getMoveDataFromMessage(bot, gameInfo, message, others) {
             boardinfo.push(token);
         }
 
-        switch (cleantoken) {
-            case 'move':
-            case 'info':
-            case 'resign':
-            case 'draw':
-            case 'change':
-            case 'take':
-                verb = cleantoken;
-                break;
-
-            case 'undo':
-                verb = cleantoken;
-                isTakeBack = true;
-                break;
-
-            case 'back':
-                if (prevToken === 'take') {
+	if (isTakeBack) {
+	    boardInfo.push(token);
+	} else {
+            switch (cleantoken) {
+                case 'move':
+                case 'info':
+                case 'resign':
+                case 'draw':
+                case 'change':
+                case 'take':
+                    verb = cleantoken;
+                    break;
+    
+                case 'undo':
+                    verb = cleantoken;
                     isTakeBack = true;
-                    verb = 'undo';
-                }
-                break;
-
-            case 'play':
-                verb = 'newgame';
-                break;
-
-            case 'cancel':
-                verb = cleantoken;
-        }
+                    break;
+    
+                case 'back':
+                    if (/*take back*/prevToken === 'take' || (/*or take [move|it] back*/prevTokens.length > 2 && prevTokens[1] !== 'take') ) {
+                        isTakeBack = true;
+                        verb = 'undo';
+                    }
+                    break;
+    
+                case 'play':
+                    verb = 'newgame';
+                    break;
+     
+                case 'cancel':
+                    verb = cleantoken;
+            }
+ 	}
 
         // for newgames, see if the player side colour has been specified
         if (verb == 'newgame') {
@@ -124,6 +149,7 @@ function getMoveDataFromMessage(bot, gameInfo, message, others) {
         }
 
         prevToken = cleantoken;
+	prevTokens.push(cleantoken);
     });
 
     return { verb, target, boardinfo, isTakeBack, whitePlayer, blackPlayer };
@@ -165,7 +191,7 @@ jgs(______)(_______)(_______)(________)(________)(_________)
 */
 
 
-var gameState = makeGameData();
+var gameData = makeGameData();
 
 
 // Configure logger settings
@@ -186,10 +212,34 @@ bot.on('ready', function (evt) {
     logger.info('Connected');
     logger.info('Logged in as: ');
     logger.info(bot.username + ' - (' + bot.id + ')');
-
-    gameState = makeGameData();
+    gameData = makeGameData();
 });
 
+function processVerb(bot, gameData, channelID, userID, moveObjs) {
+    const target = moveObjs.target;
+
+    switch (moveObjs.verb) {
+        case 'newgame':
+	    if (isValidNewGame(bot, gameData, channelID, userID, target)) {
+                openGameNegociation(bot, gameData, channelID, userID, makeGameKey(userID, target.id, channelID), target.id);
+            }
+            //addGame(bot, gameData, makeGameKey(userID, target[0].id, channelID), playerw, playerb, new Chess());
+            break;
+
+/* 
+            while (!chess.game_over()) {
+              var moves = chess.moves();
+              var move = moves[Math.floor(Math.random() * moves.length)];
+              chess.move(move);
+            }
+            console.log(chess.pgn()); 
+*/
+
+        default:
+            break;
+    }
+
+}
 
 bot.on('message', function (user, userID, channelID, message, evt) {
     const me = evt.d.mentions.filter(m => m.id == bot.id);
@@ -203,27 +253,33 @@ bot.on('message', function (user, userID, channelID, message, evt) {
 
     const possibleExistingGameForThisUserInThisChannel = getExistingGame(bot, gameData, userID, channelID);
 
-    var moveObjs = getMoveDataFromMessage(bot, possibleExistingGameForThisUserInThisChannel, message, others);
+    const moveObjs = getMoveDataFromMessage(bot, possibleExistingGameForThisUserInThisChannel, userID, channelID, message, others);
 
-
-    switch (moveObjs.verb) {
-        case 'newgame':
-            openGameNegociation(bot, gameData, channelID, userId, makeGameKey(userID, target[0].id, channelID), target[0].id);
-            //addGame(bot, gameData, makeGameKey(userID, target[0].id, channelID), playerw, playerb, new Chess());
-            break;
-
-        /*	while (!chess.game_over()) {
-            var moves = chess.moves();
-            var move = moves[Math.floor(Math.random() * moves.length)];
-            chess.move(move);
-            }
-            console.log(chess.pgn()); */
-
-        default:
-            break;
+    //console.log('mid', me, others, possibleExistingGameForThisUserInThisChannel, moveObjs);
+    if (moveObjs !== null) {
+        processVerb(bot, gameData, channelID, userID, moveObjs);
+	debugDump(bot, channelID, { verb: moveObjs.verb, target: moveObjs.target, boardinfo: moveObjs.boardinfo.join() });
     }
+//    switch (moveObjs.verb) {
+//        case 'newgame':
+//            openGameNegociation(bot, gameData, channelID, userID, makeGameKey(userID, target[0].id, channelID), target[0].id);
+//            //addGame(bot, gameData, makeGameKey(userID, target[0].id, channelID), playerw, playerb, new Chess());
+//            break;
 
-    debugDump(bot, channelID, { verb: moveObjs.verb, target: moveObjs.target.join(), boardinfo: moveObjs.boardinfo.join() });
+/* 
+	    while (!chess.game_over()) {
+              var moves = chess.moves();
+              var move = moves[Math.floor(Math.random() * moves.length)];
+              chess.move(move);
+            }
+            console.log(chess.pgn()); 
+*/
+
+//        default:
+//            break;
+//    }
+
+//    debugDump(bot, channelID, { verb: moveObjs.verb, target: moveObjs.target.join(), boardinfo: moveObjs.boardinfo.join() });
     //bot.sendMessage({
     //    to: channelID,
     //    message: 'verb: ' + moveObjs.verb + ' target: ' + moveObjs.target.join() + ' boardinfo: ' + moveObjs.boardinfo.join()
