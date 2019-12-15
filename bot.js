@@ -1,9 +1,19 @@
 const Discord = require('discord.io');
 const logger = require('winston');
-const auth = require('./../auth.json');
 const Chess = require('./chess.js').Chess;
 const DiscordJs = require('discord.js');
 
+var auth = null;
+try {
+    auth = require('./../auth.json');
+}
+catch(error) {
+    auth = null;
+}
+
+if (auth == null) {
+    auth = require('./auth.json');
+}
 
 /* note these suit of functions to be promoted to own file and required('./...')'d in */
 function debugDump(bot, channelID, shitToDump) {
