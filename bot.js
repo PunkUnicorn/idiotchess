@@ -7,7 +7,7 @@ var auth = null;
 try {
     auth = require('./../auth.json');
 }
-catch(error) {
+catch (error) {
     auth = null;
 }
 
@@ -29,11 +29,11 @@ function addGame(bot, gameData, gamename, playerw, playerb, chessjs) {
 }
 
 function makeGameKey(userID, targetid, channelID) {
-    return [ userID.toString(), targetid.toString(), channelID.toString() ].join();
+    return [userID.toString(), targetid.toString(), channelID.toString()].join();
 }
 
 function gameInstance_isPlaying() {
-    if (typeof this.scorewhite === 'undefined') {throw 'wut? gameInstance_isPlaying() function expected to be called from a gameInstance object';}
+    if (typeof this.scorewhite === 'undefined') { throw 'wut? gameInstance_isPlaying() function expected to be called from a gameInstance object'; }
     var game = this;
 
 
@@ -45,7 +45,7 @@ function makeGameData() {
 }
 
 function makeGameInstance() {
-    return { scorewhite:0, scoreblack:0, isPlaying:gameInstance_isPlaying };
+    return { scorewhite: 0, scoreblack: 0, isPlaying: gameInstance_isPlaying };
 }
 
 function isValidNewGame(bot, gameData, channelID, userID, target) {
@@ -64,7 +64,7 @@ function openGameNegociation(bot, gameData, channelID, challengerUserId, gameKey
 
     // if all is well
     //    open the negociation
-    
+
     // WHAT USER INTERFACE TO OPEN A CHALLENGE? 
     //    the bot message with two attached emojies is a good way, and both players click the tick
     //    start the negociation and set a timeout to cancel it
@@ -115,9 +115,9 @@ function getMoveDataFromMessage(bot, gameInfo, userID, channelID, message, other
             boardinfo.push(token);
         }
 
-	if (isTakeBack) {
-	    boardInfo.push(token);
-	} else {
+        if (isTakeBack) {
+            boardInfo.push(token);
+        } else {
             switch (cleantoken) {
                 case 'move':
                 case 'info':
@@ -127,30 +127,30 @@ function getMoveDataFromMessage(bot, gameInfo, userID, channelID, message, other
                 case 'take':
                     verb = cleantoken;
                     break;
-    
+
                 case 'undo':
                     verb = cleantoken;
                     isTakeBack = true;
                     break;
-    
+
                 case 'back':
-                    if (/*take back*/prevToken === 'take' || (/*or take [move|it] back*/prevTokens.length > 2 && prevTokens[1] !== 'take') ) {
+                    if (/* 'take back' */prevToken === 'take' || (/* or 'take [move|it] back' */prevTokens.length > 2 && prevTokens[1] !== 'take')) {
                         isTakeBack = true;
                         verb = 'undo';
                     }
                     break;
-    
+
                 case 'play':
                     verb = 'newgame';
                     break;
-     
+
                 case 'cancel':
                     verb = cleantoken;
             }
- 	}
+        }
 
         // for newgames, see if the player side colour has been specified
-        if (verb == 'newgame') {
+        if (verb === 'newgame') {
             if (token === 'black') {
                 whitePlayer = userID;
             } else if (token === 'white') {
@@ -159,7 +159,7 @@ function getMoveDataFromMessage(bot, gameInfo, userID, channelID, message, other
         }
 
         prevToken = cleantoken;
-	prevTokens.push(cleantoken);
+        prevTokens.push(cleantoken);
     });
 
     return { verb, target, boardinfo, isTakeBack, whitePlayer, blackPlayer };
@@ -230,20 +230,20 @@ function processVerb(bot, gameData, channelID, userID, moveObjs) {
 
     switch (moveObjs.verb) {
         case 'newgame':
-	    if (isValidNewGame(bot, gameData, channelID, userID, target)) {
+            if (isValidNewGame(bot, gameData, channelID, userID, target)) {
                 openGameNegociation(bot, gameData, channelID, userID, makeGameKey(userID, target.id, channelID), target.id);
             }
             //addGame(bot, gameData, makeGameKey(userID, target[0].id, channelID), playerw, playerb, new Chess());
             break;
 
-/* 
-            while (!chess.game_over()) {
-              var moves = chess.moves();
-              var move = moves[Math.floor(Math.random() * moves.length)];
-              chess.move(move);
-            }
-            console.log(chess.pgn()); 
-*/
+        /* 
+                    while (!chess.game_over()) {
+                      var moves = chess.moves();
+                      var move = moves[Math.floor(Math.random() * moves.length)];
+                      chess.move(move);
+                    }
+                    console.log(chess.pgn()); 
+        */
 
         default:
             break;
@@ -268,30 +268,40 @@ bot.on('message', function (user, userID, channelID, message, evt) {
     //console.log('mid', me, others, possibleExistingGameForThisUserInThisChannel, moveObjs);
     if (moveObjs !== null) {
         processVerb(bot, gameData, channelID, userID, moveObjs);
-	debugDump(bot, channelID, { verb: moveObjs.verb, target: moveObjs.target, boardinfo: moveObjs.boardinfo.join() });
+        debugDump(bot, channelID, { verb: moveObjs.verb, target: moveObjs.target, boardinfo: moveObjs.boardinfo.join() });
     }
-//    switch (moveObjs.verb) {
-//        case 'newgame':
-//            openGameNegociation(bot, gameData, channelID, userID, makeGameKey(userID, target[0].id, channelID), target[0].id);
-//            //addGame(bot, gameData, makeGameKey(userID, target[0].id, channelID), playerw, playerb, new Chess());
-//            break;
+    //    switch (moveObjs.verb) {
+    //        case 'newgame':
+    //            openGameNegociation(bot, gameData, channelID, userID, makeGameKey(userID, target[0].id, channelID), target[0].id);
+    //            //addGame(bot, gameData, makeGameKey(userID, target[0].id, channelID), playerw, playerb, new Chess());
+    //            break;
 
-/* 
-	    while (!chess.game_over()) {
-              var moves = chess.moves();
-              var move = moves[Math.floor(Math.random() * moves.length)];
-              chess.move(move);
-            }
-            console.log(chess.pgn()); 
-*/
+    /* 
+            while (!chess.game_over()) {
+                  var moves = chess.moves();
+                  var move = moves[Math.floor(Math.random() * moves.length)];
+                  chess.move(move);
+                }
+                console.log(chess.pgn()); 
+    */
 
-//        default:
-//            break;
-//    }
+    //        default:
+    //            break;
+    //    }
 
-//    debugDump(bot, channelID, { verb: moveObjs.verb, target: moveObjs.target.join(), boardinfo: moveObjs.boardinfo.join() });
+    //    debugDump(bot, channelID, { verb: moveObjs.verb, target: moveObjs.target.join(), boardinfo: moveObjs.boardinfo.join() });
     //bot.sendMessage({
     //    to: channelID,
     //    message: 'verb: ' + moveObjs.verb + ' target: ' + moveObjs.target.join() + ' boardinfo: ' + moveObjs.boardinfo.join()
     //});
 });
+
+var http = require("http");
+
+http.createServer(function (request, response) {
+    response.writeHead(200, { 'Content-Type': 'text/plain' });
+    response.end('This bot is now woke\n');
+}).listen(8081);
+
+// Console will print the message
+console.log('Server running at http://127.0.0.1:8081/');
