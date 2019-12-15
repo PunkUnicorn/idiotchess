@@ -22,7 +22,7 @@ steps:
   displayName: 'npm install'
 
 - task: CopyFiles@2
- inputs:
+  inputs:
    Contents: '**'
    TargetFolder: '$(Build.ArtifactStagingDirectory)''
     
