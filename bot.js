@@ -8,25 +8,30 @@ try {
     auth = require('./../auth.json');
 }
 catch (error) {
-    auth = null;
-}
-
-if (auth === null) {
     auth = require('./auth.json');
 }
 
+
+
 /* note these suit of functions to be promoted to own file and required('./...')'d in */
+
+
+
 function debugDump(bot, channelID, shitToDump) {
-    //console.log('debugDump', bot, channelID, shitToDump);
+    console.log('debugDump', shitToDump);
     bot.sendMessage({
         to: channelID,
         message: JSON.stringify(shitToDump)
     });
 }
 
-function addGame(bot, gameData, gamename, playerw, playerb, chessjs) {
-    gameState.games.push({ gamename, playerw, playerb, chessjs });
-}
+
+/* Negociation types */
+const NT_GAME = 1, NT_DRAW = 2, NT_MODECHANGE = 3;
+
+/* Negociation state */
+const NS_INVITED = 1, NS_ACCEPTED = 2, NS_REJECTED = 3;
+
 
 function makeGameKey(userID, targetid, channelID) {
     return [userID.toString(), targetid.toString(), channelID.toString()].join();
@@ -37,11 +42,28 @@ function isGameDataObj(gameDataObj) {
 }
 
 function isGameInstanceObj(gameInstanceObj) {
-    return typeof gameInstanceObj.scorewhite !== 'undefined';
+    return typeof gameInstanceObj.playerwhite !== 'undefined';
+}
+
+function addPossibleNewGame(bot, gameData, moveObjs) {
+    const gamekey = makeGameKey(moveObjs.userID, moveObjs.target.id, moveObjs.channelID);
+    const game = {
+        key: gamekey,
+        state: NS_INVITED,
+        data: moveObjs,
+        scorewhite: 0,
+        scoreblack: 0,
+        isPlaying: gameInstance_isPlaying,
+        chessjs: null,
+        chessy: null
+    };
+    gameData.games.push(game);
+    return game;
 }
 
 function gameInstance_isPlaying() {
     if (!isGameInstanceObj(this)) { throw 'wut? gameInstance_isPlaying() function expected to be called from a gameInstance object'; }
+
     var game = this;
 
     return (game.playerwhite !== null && game.playerblack !== null);
@@ -78,17 +100,65 @@ function makeGameInstance() {
     return { scorewhite: 0, scoreblack: 0, playerwhite: null, playerblack: null, isPlaying: gameInstance_isPlaying };
 }
 
-function isValidNewGame(bot, gameData, channelID, userID, target) {
-    return typeof target !== 'undefined';
+function isValidNewGame(bot, gameData, channelID, userID, moveObjs) {
+    debugDump(bot, gameData, moveObjs);
+    return typeof moveObjs.target !== 'undefined' && moveObjs.target !== null &&
+        typeof moveObjs.playerwhite !== 'undefined' && moveObjs.playerwhite !== null &&
+        typeof moveObjs.playerblack !== 'undefined' && moveObjs.playerblack !== null;
 }
 
-function openGameNegociation(bot, gameData, channelID, challengerUserId, gameKey, targetID) {
+function getExistingGame(bot, gameData, targetID, userID, channelID) {
+    // because we limit a user to one game per channel (*1), we can use the userID and channelID to get any existing running game
+    //   FIND EXISTING GAME IN gameData
+
+    if (targetID === null) {
+
+        var matches = gameData_getGamesForUser(userID).filter(f => f.data.channelID === channelID);
+
+        if (matches === 0)
+            return null;
+
+        if (matches > 1) {
+            const errorMsg = { error: '{<@!>' + userID + '} has more than one game in this channel.', sorryDaveICantLetYouDoThat: true };
+            debugDump(bot, channelID, errorMsg);
+            throw 'throwing up with ' + JSON.stringify(errorMsg);
+        }
+
+        return gameData.games.filter(f => gameData_getGamesForUser);
+
+    } else {
+
+        const gameKey = makeGameKey(userID, targetID, channelID);
+
+        const existing = gameData.games.filter(f => f.key = gameKey);
+
+        return (existing.length === 0)
+            ? makeGameInstance(bot, gameData)
+            : existing[0];
+
+    }
+}
+
+function openGameNegociation(bot, gameData, newgame) {
+
     // check for existing game with that key
     //    reject game negociation if already a game
 
     // limit a user to only one game per channel (*1)
     //    then the game instance can be gleamed from the user id (who sent the message) and the channel id
 
+    const existingGame = getExistingGame(bot, gameData, newgame.data.target.id, newgame.data.userID, newgame.data.channelID);
+    if (existingGame.key !== newgame.key) {
+        debugDump(bot, newgame.data.channelID, { error: '{<@!>' + newgame.data.userID + '} already has a game in this channel.', sorryDaveICantLetYouDoThat: true });
+        return;
+    }
+
+    if (newgame.state !== NS_INVITED) {
+        debugDump(bot, newgame.data.channelID, { warning: 'This game does seem to be being negociated. I\'m changing that though...', bitWeirdButOk: true });
+        newgame.state = NS_INVITED;
+    }
+
+    newgame.data.timer = setTimeout(function (bot, gameData) { }, newgame.data.timeout)
     // start timer for negociation timeout
     //    reject game if times out (10 mins?)
 
@@ -100,16 +170,7 @@ function openGameNegociation(bot, gameData, channelID, challengerUserId, gameKey
     //    start the negociation and set a timeout to cancel it
 }
 
-function getExistingGame(bot, gameData, userID, channelID) {
-    // because we limit a user to one game per channel (*1), we can use the userID and channelID to get any existing running game
-    //   FIND EXISTING GAME IN gameData
-
-    //return existing running game for userID and channelID
-    const newGame = makeGameInstance(bot, gameData);
-    return newGame;
-}
-
-function getMoveDataFromMessage(bot, gameInfo, userID, channelID, message, others) {
+function getUsefulThingsFromMessage(bot, gameInfo, userID, channelID, message, others) {
     console.log(message);
     const decodeMe = message
         .replace( /\<\@\![0-9]+\>/g, '') // remove mentions tags
@@ -121,7 +182,7 @@ function getMoveDataFromMessage(bot, gameInfo, userID, channelID, message, other
     var verb = '';
 
     var target = others[0];//only one mention is acknoledged 
-    var boardinfo = [];
+    var restOfMessage = [];
     var whitePlayer = null, blackPlayer = null;
     var isTakeBack = false;
 
@@ -130,17 +191,17 @@ function getMoveDataFromMessage(bot, gameInfo, userID, channelID, message, other
     decodeMe.forEach(token => {
         const cleantoken = token
             .toLowerCase()
-            .replace(/(\!)/g, '')
-            .replace(/(\?)/g, '')
-            .replace(/(\.)/g, '');
+            .replace( /\!/g, '')
+            .replace( /\?/g, '')
+            .replace( /\./g, '');
 
-        if (cleantoken.length == 0)
+        if (cleantoken.length === 0)
             return;
         
         console.log('cleant', cleantoken);
 
         if (isTakeBack) {
-            boardInfo.push(token);
+            restOfMessage.push(token);
         } else {
             switch (cleantoken) {
                 case 'move':
@@ -173,14 +234,14 @@ function getMoveDataFromMessage(bot, gameInfo, userID, channelID, message, other
                     break;
 
                 default:
-                    boardinfo.push(token);
+                    restOfMessage.push(token);
                     break;
             }
         }
 
         if (verb.length === 0) {
             // if game already in play the default verb is 'move'
-            verb = gameInfo.isPlaying() ? 'move' : 'newgame';
+            verb = gameInfo === null ? 'move' : 'newgame';
         }
 
         // for newgames, see if the player side colour has been specified
@@ -190,7 +251,9 @@ function getMoveDataFromMessage(bot, gameInfo, userID, channelID, message, other
                 blackPlayer = userID;
             } else if (token === 'white') {
                 whitePlayer = userID;
-                blackPlayer = target.id;
+                blackPlayer = (typeof target === 'undefined' || target === null)
+                    ? null
+                    : target.id;
             }
         }
 
@@ -198,14 +261,31 @@ function getMoveDataFromMessage(bot, gameInfo, userID, channelID, message, other
         prevTokens.push(cleantoken);
     });
 
-    return { verb, target, boardinfo, isTakeBack, whitePlayer, blackPlayer };
+    if (whitePlayer === null) {
+        whitePlayer = userID;
+    }
+
+    if (blackPlayer === null) {
+        blackPlayer = (typeof target !== 'undefined' && target !== null)
+            ? target.id
+            : null;
+    }
+
+    return {
+        channelID, /* channel the message was on */
+        userID, /* user id of who made the message */
+        verb, /* command verb gleamed from the chat message */
+        target, /* a complete user object for the first mentioned user, .id .username etc */
+        restOfMessage, /* everything from the message except the verb and user mentions */
+
+        /* for newgame */
+        playerwhite: whitePlayer, /* userID of the white player */
+        playerblack: blackPlayer, /* userID of the black player */
+        timeout: 10 /* how many minuets to wait for the game challenge to be accepted */
+    };
 }
 
-/* Negociation types */
-const NT_GAME = 0x1, NT_DRAW = 0x2, NT_MODECHANGE = 0x4;
 
-/* Negociation state */
-const NS_INVITED = 0x1, NS_ACCEPTED = 0x2, NS_REJECTED = 0x4;
 
 /* end of 'require(...)' split */
 
@@ -266,8 +346,11 @@ function processVerb(bot, gameData, channelID, userID, moveObjs) {
 
     switch (moveObjs.verb) {
         case 'newgame':
-            if (isValidNewGame(bot, gameData, channelID, userID, target)) {
-                openGameNegociation(bot, gameData, channelID, userID, makeGameKey(userID, target.id, channelID), target.id);
+            if (isValidNewGame(bot, gameData, channelID, userID, moveObjs)) {
+                var newgame = addPossibleNewGame(bot, gameData, moveObjs);
+                openGameNegociation(bot, gameData, newgame);
+            } else {
+                debugDump(bot, channelID, { error: 'Not a valid new game', sorryDaveICantLetYouDoThat: true });
             }
             //addGame(bot, gameData, makeGameKey(userID, target[0].id, channelID), playerw, playerb, new Chess());
             break;
@@ -297,11 +380,11 @@ bot.on('message', function (user, userID, channelID, message, evt) {
 
     const otherMentions
         = evt.d.mentions
-            .filter(m => m.id !== bot.id && m.id != userID);
+            .filter(m => m.id !== bot.id && m.id !== userID);
 
-    const possibleExistingGameForThisUserInThisChannel = getExistingGame(bot, gameData, userID, channelID);
+    var existingGameOrPossibleGame = getExistingGame(bot, gameData, null/*unknown*/, userID, channelID);
 
-    const moveObjs = getMoveDataFromMessage(bot, possibleExistingGameForThisUserInThisChannel, userID, channelID, message, otherMentions);
+    const moveObjs = getUsefulThingsFromMessage(bot, existingGameOrPossibleGame, userID, channelID, message, otherMentions);
 
     if (moveObjs !== null) {
         processVerb(bot, gameData, channelID, userID, moveObjs);
@@ -309,7 +392,7 @@ bot.on('message', function (user, userID, channelID, message, evt) {
             ? moveObjs.target
             : { username:'' };
 
-        debugDump(bot, channelID, { verb: moveObjs.verb, target: target.username, boardinfo: moveObjs.boardinfo.join(), whitePlayer: moveObjs.whitePlayer, blackPlayer: moveObjs.blackPlayer });
+        debugDump(bot, channelID, { verb: moveObjs.verb, target: target.username, restOfMessage: moveObjs.restOfMessage.join(), playerwhite: moveObjs.whitePlayer, playerblack: moveObjs.blackPlayer: moveObjs.blackPlayer });
     }
 });
 
