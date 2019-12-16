@@ -392,7 +392,7 @@ bot.on('message', function (user, userID, channelID, message, evt) {
             ? moveObjs.target
             : { username:'' };
 
-        debugDump(bot, channelID, { verb: moveObjs.verb, target: target.username, restOfMessage: moveObjs.restOfMessage.join(), playerwhite: moveObjs.whitePlayer, playerblack: moveObjs.blackPlayer: moveObjs.blackPlayer });
+        debugDump(bot, channelID, { verb: moveObjs.verb, target: target.username, restOfMessage: moveObjs.restOfMessage.join(), playerwhite: moveObjs.whitePlayer, playerblack: moveObjs.blackPlayer });
     }
 });
 
