@@ -2,7 +2,7 @@
 
 [![Build Status](https://matthewcocks.visualstudio.com/AWCards/_apis/build/status/PunkUnicorn.idiotchess?branchName=master)](https://matthewcocks.visualstudio.com/AWCards/_build/latest?definitionId=4&branchName=master)
 
-![Idiot Chess for Stupids](/CHESS.png)
+![Idiot Chess for Stupids](CHESS.png)
 
 ~~Publishes to https://idiotchess01.azurewebsites.net/
 Although this is a free hosting that goes to sleep. Wake it  up with an http get (hint put the url in the browser)~~
