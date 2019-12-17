@@ -124,7 +124,7 @@ function getExistingGame(bot, gameData, targetID, userID, channelID) {
             throw 'throwing up with ' + JSON.stringify(errorMsg);
         }
 
-        return gameData.games.filter(f => gameData_getGamesForUser);
+        return matches[0];
 
     } else {
 
@@ -133,13 +133,19 @@ function getExistingGame(bot, gameData, targetID, userID, channelID) {
         const existing = gameData.games.filter(f => f.key = gameKey);
 
         return (existing.length === 0)
-            ? makeGameInstance(bot, gameData)
+            ? null //makeGameInstance(bot, gameData)
             : existing[0];
 
     }
 }
 
-function openGameNegociation(bot, gameData, newgame) {
+function endOpenedNegociations(newgame) {
+    // it's gone sour, cold war begins
+
+    // close the negociations (remove game obj etc)
+}
+
+function openGameNegociation(bot, gameData, message, newgame) {
 
     // check for existing game with that key
     //    reject game negociation if already a game
@@ -148,7 +154,7 @@ function openGameNegociation(bot, gameData, newgame) {
     //    then the game instance can be gleamed from the user id (who sent the message) and the channel id
 
     const existingGame = getExistingGame(bot, gameData, newgame.data.target.id, newgame.data.userID, newgame.data.channelID);
-    if (existingGame.key !== newgame.key) {
+    if (existingGame !== null && existingGame.key !== newgame.key) {
         debugDump(bot, newgame.data.channelID, { error: '{<@!>' + newgame.data.userID + '} already has a game in this channel.', sorryDaveICantLetYouDoThat: true });
         return;
     }
@@ -158,7 +164,31 @@ function openGameNegociation(bot, gameData, newgame) {
         newgame.state = NS_INVITED;
     }
 
-    newgame.data.timer = setTimeout(function (bot, gameData) { }, newgame.data.timeout)
+    console.log(message);
+    const love_letter = '\u1F48C';
+    bot.sendMessage({
+        to: newgame.data.channelID,
+        message: love_letter
+    });
+    //message.react(love_letter);
+
+    newgame.data.timer = setTimeout(
+        function (bot, gameData, newgame) {
+            endOpenedNegociations(newgame);
+        }, newgame.data.timeout, bot, gameData, newgame);
+
+    var acceptanceMessage = bot.sendMessage({
+        to: newgame.data.channelID,
+        message: '<@!'+newgame.data.target.id+'> You have been challenged by <@!' +newgame.data.userID+ '>, do you accept?'
+    });
+
+    //const ok = '\u1F197';
+    //const cross = '\u2717';//bot.emojis.find(emoji => emoji.name === "x");
+    //console.log(acceptanceMessage);
+    //acceptanceMessage.react(ok);
+    //acceptanceMessage.react(cross);
+
+
     // start timer for negociation timeout
     //    reject game if times out (10 mins?)
 
@@ -341,14 +371,14 @@ bot.on('ready', function (evt) {
     gameData = makeGameData();
 });
 
-function processVerb(bot, gameData, channelID, userID, moveObjs) {
+function processVerb(bot, gameData, message, channelID, userID, moveObjs) {
     const target = moveObjs.target;
 
     switch (moveObjs.verb) {
         case 'newgame':
             if (isValidNewGame(bot, gameData, channelID, userID, moveObjs)) {
                 var newgame = addPossibleNewGame(bot, gameData, moveObjs);
-                openGameNegociation(bot, gameData, newgame);
+                openGameNegociation(bot, gameData, message, newgame);
             } else {
                 debugDump(bot, channelID, { error: 'Not a valid new game', sorryDaveICantLetYouDoThat: true });
             }
@@ -371,6 +401,9 @@ function processVerb(bot, gameData, channelID, userID, moveObjs) {
 }
 
 bot.on('message', function (user, userID, channelID, message, evt) {
+    console.log(evt.d);
+    const content = message;
+    //, evt
     const botMentions = evt.d.mentions.filter(m => m.id === bot.id);
 
     // if this function is not applicable then get out of here ASAP, and don't clog up the indenting on your way out
@@ -384,10 +417,10 @@ bot.on('message', function (user, userID, channelID, message, evt) {
 
     var existingGameOrPossibleGame = getExistingGame(bot, gameData, null/*unknown*/, userID, channelID);
 
-    const moveObjs = getUsefulThingsFromMessage(bot, existingGameOrPossibleGame, userID, channelID, message, otherMentions);
+    const moveObjs = getUsefulThingsFromMessage(bot, existingGameOrPossibleGame, userID, channelID, content, otherMentions);
 
     if (moveObjs !== null) {
-        processVerb(bot, gameData, channelID, userID, moveObjs);
+        processVerb(bot, gameData, message, channelID, userID, moveObjs);
         var target = (typeof moveObjs.target !== 'undefined' && moveObjs.target !== null)
             ? moveObjs.target
             : { username:'' };
