@@ -149,8 +149,8 @@ function getExistingGame(bot, gameData, targetID, messageSenderUserID, channelID
 
 function endOpenedNegociations(bot, gameData, newgame) {
     // it's gone sour, cold war begins
-    const msg = '<@!' + newgame.data.target.id + '> and <@!' + newgame.data.userID + '>';
-    debugDump(bot, newgame.data.channelID, { warning:'negociation has timeed out between: ' + msg });
+    const msg = '<@!' + newgame.data.userID  + '> and <@!' + newgame.data.target.id + '>';
+    debugDump(bot, newgame.data.channelID, { warning:'negociation has timed out between: ' + msg });
 
     // close the negociations (remove game obj etc)
     removeGame(bot, gameData, newgame);
@@ -215,7 +215,9 @@ function openGameNegociation(bot, gameData, message, newgame) {
 
 
     bot.channels.find('id', newgame.data.channelID)
-        .send('<@!' + newgame.data.target.id + '> You have been challenged by <@!' + newgame.data.userID + '>, do you accept?')
+//      .send('<@!' + newgame.data.target.id + '> You have been challenged by <@!' + newgame.data.userID + '>, do you accept? Oh it\'s <@!' + newgame.data.target.id + '>, well he wins by default I\'m afraid <@!' + newgame.data.userID + '>')
+
+        .send('<@!' + newgame.data.target.id + '> You have been challenged by <@!' + newgame.data.userID + '>, do you accept? Oh it\'s <@!' + newgame.data.target.id + '>')
         .then(
 
                 function (result)
