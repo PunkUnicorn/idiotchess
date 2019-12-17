@@ -150,18 +150,36 @@ function getExistingGame(bot, gameData, targetID, messageSenderUserID, channelID
 function endOpenedNegociations(bot, gameData, newgame) {
     // it's gone sour, cold war begins
     const msg = '<@!' + newgame.data.target.id + '> and <@!' + newgame.data.userID + '>';
-    debugDump(bot, newgame.data.channelID, { warning:'negociation has timeed out between: ' + msg});
+    debugDump(bot, newgame.data.channelID, { warning:'negociation has timeed out between: ' + msg });
 
-    newgame.data.timer.clearInterval(timeout);
     // close the negociations (remove game obj etc)
     removeGame(bot, gameData, newgame);
 }
 
-const love_letter = '\uD83D\uDC8C';// '\u1F48C';
-const ok = '\uD83C\uDD97';//'\u1F197';
-const cross = '\u2717';//bot.emojis.find(emoji => emoji.name === "x");
+function toUTF16(codePoint) {
+    var TEN_BITS = parseInt('1111111111', 2);
+    function u(codeUnit) {
+        return '\\u' + codeUnit.toString(16).toUpperCase();
+    }
+
+    if (codePoint <= 0xFFFF) {
+        return u(codePoint);
+    }
+    codePoint -= 0x10000;
+
+    // Shift right to get to most significant 10 bits
+    var leadSurrogate = 0xD800 + (codePoint >> 10);
+
+    // Mask to get least significant 10 bits
+    var tailSurrogate = 0xDC00 + (codePoint & TEN_BITS);
+
+    return u(leadSurrogate) + u(tailSurrogate);
+}
 
 function openGameNegociation(bot, gameData, message, newgame) {
+    const love_letter = '\uD83D\uDC8C';// '\u1F48C';
+    const ok = '\uD83C\uDD97';//'\u1F197';
+    const cross = '\uD83D\uDEAB'; //'\u2717';//
 
     // check for existing game with that key
     //    reject game negociation if already a game
@@ -352,7 +370,7 @@ function getUsefulThingsFromMessage(bot, gameInfo, userID, channelID, message, o
         /* for newgame */
         playerwhite: whitePlayer, /* userID of the white player */
         playerblack: blackPlayer, /* userID of the black player */
-        timeout: 10 /* how many minuets to wait for the game challenge to be accepted */
+        timeout: 2 /* how many minuets to wait for the game challenge to be accepted */
     };
 }
 
