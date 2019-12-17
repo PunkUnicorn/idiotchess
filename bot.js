@@ -1,7 +1,7 @@
-const Discord = require('discord.io');
+//const Discord = require('discord.io');
 const logger = require('winston');
 const Chess = require('./chess.js').Chess;
-const DiscordJs = require('discord.js');
+const Discord = require('discord.js');
 
 var auth = null;
 try {
@@ -18,11 +18,11 @@ catch (error) {
 
 
 function debugDump(bot, channelID, shitToDump) {
-    console.log('debugDump', shitToDump);
-    bot.sendMessage({
-        to: channelID,
-        message: JSON.stringify(shitToDump)
-    });
+    console.log('debugDump', shitToDump, 'channelID', channelID);
+    
+    bot.channels
+        .find('id', channelID)
+        .send(JSON.stringify(shitToDump));
 }
 
 
@@ -59,6 +59,14 @@ function addPossibleNewGame(bot, gameData, moveObjs) {
     };
     gameData.games.push(game);
     return game;
+}
+
+function removeGame(bot, gameData, newgame)
+{
+    const gamekey = makeGameKey(newgame.data.userID, newgame.data.target.id, newgame.data.channelID);
+    console.log('before', gameData);
+    gameData.games.splice(gameData.games.indexOf(gameData.games.filter(f => f.key === gamekey)), 1);
+    console.log('after', gameData);
 }
 
 function gameInstance_isPlaying() {
@@ -101,25 +109,25 @@ function makeGameInstance() {
 }
 
 function isValidNewGame(bot, gameData, channelID, userID, moveObjs) {
-    debugDump(bot, gameData, moveObjs);
+    //debugDump(bot, moveObjs.channelID, moveObjs);
     return typeof moveObjs.target !== 'undefined' && moveObjs.target !== null &&
         typeof moveObjs.playerwhite !== 'undefined' && moveObjs.playerwhite !== null &&
         typeof moveObjs.playerblack !== 'undefined' && moveObjs.playerblack !== null;
 }
 
-function getExistingGame(bot, gameData, targetID, userID, channelID) {
+function getExistingGame(bot, gameData, targetID, messageSenderUserID, channelID) {
     // because we limit a user to one game per channel (*1), we can use the userID and channelID to get any existing running game
     //   FIND EXISTING GAME IN gameData
 
     if (targetID === null) {
 
-        var matches = gameData_getGamesForUser(userID).filter(f => f.data.channelID === channelID);
+        var matches = gameData_getGamesForUser(messageSenderUserID).filter(f => f.data.channelID === channelID);
 
         if (matches === 0)
             return null;
 
         if (matches > 1) {
-            const errorMsg = { error: '{<@!>' + userID + '} has more than one game in this channel.', sorryDaveICantLetYouDoThat: true };
+            const errorMsg = { error: '{<@!>' + messageSenderUserID + '} has more than one game in this channel.', sorryDaveICantLetYouDoThat: true };
             debugDump(bot, channelID, errorMsg);
             throw 'throwing up with ' + JSON.stringify(errorMsg);
         }
@@ -128,7 +136,7 @@ function getExistingGame(bot, gameData, targetID, userID, channelID) {
 
     } else {
 
-        const gameKey = makeGameKey(userID, targetID, channelID);
+        const gameKey = makeGameKey(messageSenderUserID, targetID, channelID);
 
         const existing = gameData.games.filter(f => f.key = gameKey);
 
@@ -139,11 +147,19 @@ function getExistingGame(bot, gameData, targetID, userID, channelID) {
     }
 }
 
-function endOpenedNegociations(newgame) {
+function endOpenedNegociations(bot, gameData, newgame) {
     // it's gone sour, cold war begins
+    const msg = '<@!' + newgame.data.target.id + '> and <@!' + newgame.data.userID + '>';
+    debugDump(bot, newgame.data.channelID, { warning:'negociation has timeed out between: ' + msg});
 
+    newgame.data.timer.clearInterval(timeout);
     // close the negociations (remove game obj etc)
+    removeGame(bot, gameData, newgame);
 }
+
+const love_letter = '\uD83D\uDC8C';// '\u1F48C';
+const ok = '\uD83C\uDD97';//'\u1F197';
+const cross = '\u2717';//bot.emojis.find(emoji => emoji.name === "x");
 
 function openGameNegociation(bot, gameData, message, newgame) {
 
@@ -164,23 +180,48 @@ function openGameNegociation(bot, gameData, message, newgame) {
         newgame.state = NS_INVITED;
     }
 
-    console.log(message);
-    const love_letter = '\u1F48C';
-    bot.sendMessage({
-        to: newgame.data.channelID,
-        message: love_letter
-    });
+    //console.log(message);
+    message.react(love_letter);
+    //bot.channels.get(newgame.data.channelID).send()
+
+    //WAS PROBABLY USING THE WRONG LIBRARY (Discord.io vs Discord.js)
     //message.react(love_letter);
 
-    newgame.data.timer = setTimeout(
+    //newgame.data.timer.clearInterval(timeout) to destroy this timer
+    newgame.data.timer = bot.setInterval(
         function (bot, gameData, newgame) {
-            endOpenedNegociations(newgame);
-        }, newgame.data.timeout, bot, gameData, newgame);
+            clearInterval(newgame.data.timer);
 
-    var acceptanceMessage = bot.sendMessage({
-        to: newgame.data.channelID,
-        message: '<@!'+newgame.data.target.id+'> You have been challenged by <@!' +newgame.data.userID+ '>, do you accept?'
-    });
+            endOpenedNegociations(bot, gameData, newgame);
+        }, newgame.data.timeout * 1000 * 60, bot, gameData, newgame);
+
+
+    bot.channels.find('id', newgame.data.channelID)
+        .send('<@!' + newgame.data.target.id + '> You have been challenged by <@!' + newgame.data.userID + '>, do you accept?')
+        .then(
+
+                function (result)
+                {
+                    result.react(ok)
+                        .then(function (whatever) {
+                            result.react(cross).catch(function (error) { debugDump(bot, newgame.data.channelID, error); });
+                        });
+                },
+
+                function (error)
+                {
+                    debugDump(bot, newgame.data.channelID, {
+                        error: 'cant send challenge message from <@!' + newgame.data.target.id + '> to <@!' + newgame.data.userID + '>',
+                        sorryDaveICantLetYouDoThat: true
+                    });
+                }
+
+        );
+
+    //var acceptanceMessage = bot.sendMessage({
+    //    to: newgame.data.channelID,
+    //    message: '<@!'+newgame.data.target.id+'> You have been challenged by <@!' +newgame.data.userID+ '>, do you accept?'
+    //});
 
     //const ok = '\u1F197';
     //const cross = '\u2717';//bot.emojis.find(emoji => emoji.name === "x");
@@ -359,12 +400,11 @@ logger.add(new logger.transports.Console, {
 logger.level = 'debug';
 
 // Initialize Discord Bot
-var bot = new Discord.Client({
-    token: auth.token,
-    autorun: true
-});
+var bot = new Discord.Client();
+bot.login(auth.token);
 
-bot.on('ready', function (evt) {
+
+bot.on('ready', function () {
     logger.info('Connected');
     logger.info('Logged in as: ');
     logger.info(bot.username + ' - (' + bot.id + ')');
@@ -400,32 +440,48 @@ function processVerb(bot, gameData, message, channelID, userID, moveObjs) {
 
 }
 
-bot.on('message', function (user, userID, channelID, message, evt) {
-    console.log(evt.d);
-    const content = message;
-    //, evt
-    const botMentions = evt.d.mentions.filter(m => m.id === bot.id);
+function makeDebugMoveObj(moveObjs) {
+    var target = (typeof moveObjs.target !== 'undefined' && moveObjs.target !== null)
+        ? moveObjs.target
+        : { username: '' };
+
+    return {
+        verb: moveObjs.verb,
+        target: target.username,
+        restOfMessage: moveObjs.restOfMessage.join(),
+        playerwhite: moveObjs.playerwhite,
+        playerblack: moveObjs.playerblack
+    };
+}
+
+bot.on('message', function (message) {
+    if (message.author.id === bot.user.id)
+        return;
+
+    const botMentions = message.mentions.users.filter(m => m.bot.id === bot.id).array();
 
     // if this function is not applicable then get out of here ASAP, and don't clog up the indenting on your way out
     if (typeof botMentions === 'undefined' || botMentions === null || botMentions.length === 0) {
         return;
     }
 
-    const otherMentions
-        = evt.d.mentions
-            .filter(m => m.id !== bot.id && m.id !== userID);
+    const userID = message.author.id;
+    const channelID = message.channel.id;
+    const content = message.content;
 
-    var existingGameOrPossibleGame = getExistingGame(bot, gameData, null/*unknown*/, userID, channelID);
+    console.log(userID, channelID, content, bot.id, '<--------');
+
+    const otherMentions
+        = message.mentions.users
+            .filter(m => m.id !== bot.user.id && m.id !== userID).array();
+
+    var existingGameOrPossibleGame = getExistingGame(bot, gameData, null/*unknown*/, message.author.id, channelID);
 
     const moveObjs = getUsefulThingsFromMessage(bot, existingGameOrPossibleGame, userID, channelID, content, otherMentions);
 
     if (moveObjs !== null) {
         processVerb(bot, gameData, message, channelID, userID, moveObjs);
-        var target = (typeof moveObjs.target !== 'undefined' && moveObjs.target !== null)
-            ? moveObjs.target
-            : { username:'' };
-
-        debugDump(bot, channelID, { verb: moveObjs.verb, target: target.username, restOfMessage: moveObjs.restOfMessage.join(), playerwhite: moveObjs.whitePlayer, playerblack: moveObjs.blackPlayer });
+        debugDump(bot, channelID, makeDebugMoveObj(moveObjs));
     }
 });
 
