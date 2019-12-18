@@ -491,7 +491,7 @@ const url = require('url');
 const safeStringify = require('fast-safe-stringify');
 
 function adminDumpGames(bot, gameData, res, reqData) {
-    res.end(safeStringify(gameData.games));
+    res.end('<html><body style="background-color:darkslategrey; color:burlywood"><div>' + safeStringify(gameData.games) + '</div></body></html>');
 }
 
 function adminDumpGame(bot, gameData, res, reqData) {
@@ -501,7 +501,9 @@ function adminDumpGame(bot, gameData, res, reqData) {
     }
 
     const game = gameData.games.filter(f => f.key == reqData.query.gamekey);
-    res.end(safeStringify(game));
+    res.end('<html><body style="background-color:darkslategrey; color:burlywood"><div>' +
+        safeStringify(game)
+        + '</div></body></html>');
 }
 
 function adminSpeak(bot, gameData, res, reqData) {
