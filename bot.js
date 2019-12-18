@@ -506,11 +506,16 @@ bot.on('message', function (message) {
 });
 
 
-var http = require("http");
+const static = require('node-static');
+const http = require("http");
+
+const staticServer = new static.Server('./public');
+
 setTimeout(function () {
     http.createServer(function (request, response) {
-        response.writeHead(200, { 'Content-Type': 'text/plain' });
-        response.end('This bot is now woke\n');    
+        staticServer.serve(request, response);
+        //response.writeHead(200, { 'Content-Type': 'text/plain' });
+        //response.end('This bot is now woke\n');    
 
         // DIAGNOSTIC CONSOLE???
 
