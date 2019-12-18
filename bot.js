@@ -156,26 +156,6 @@ function endOpenedNegociations(bot, gameData, newgame) {
     removeGame(bot, gameData, newgame);
 }
 
-function toUTF16(codePoint) {
-    var TEN_BITS = parseInt('1111111111', 2);
-    function u(codeUnit) {
-        return '\\u' + codeUnit.toString(16).toUpperCase();
-    }
-
-    if (codePoint <= 0xFFFF) {
-        return u(codePoint);
-    }
-    codePoint -= 0x10000;
-
-    // Shift right to get to most significant 10 bits
-    var leadSurrogate = 0xD800 + (codePoint >> 10);
-
-    // Mask to get least significant 10 bits
-    var tailSurrogate = 0xDC00 + (codePoint & TEN_BITS);
-
-    return u(leadSurrogate) + u(tailSurrogate);
-}
-
 function openGameNegociation(bot, gameData, message, newgame) {
     const love_letter = '\uD83D\uDC8C';// '\u1F48C';
     const ok = '\uD83C\uDD97';//'\u1F197';
@@ -428,7 +408,6 @@ bot.on('ready', function () {
     logger.info('Connected');
     logger.info('Logged in as: ');
     logger.info(bot.username + ' - (' + bot.id + ')');
-    gameData = makeGameData();
 });
 
 function processVerb(bot, gameData, message, channelID, userID, moveObjs) {
@@ -508,20 +487,75 @@ bot.on('message', function (message) {
 
 const static = require('node-static');
 const http = require("http");
+const url = require('url');
+const safeStringify = require('fast-safe-stringify');
 
-const staticServer = new static.Server('./public');
+function adminDumpGames(bot, gameData, res, reqData) {
+    res.end(safeStringify(gameData.games));
+}
 
-setTimeout(function () {
+function adminDumpGame(bot, gameData, res, reqData) {
+    if (reqData.query.gamekey === 'undefined') {
+        res.end();
+        return;
+    }
+
+    const game = gameData.games.filter(f => f.key == reqData.query.gamekey);
+    res.end(safeStringify(game));
+}
+
+function adminSpeak(bot, gameData, res, reqData) {
+    const channel = bot.channels.filter(f => f.id === reqData.channelid).array();
+    if (channel.length == 0) {
+        res.end();
+        return;
+    }
+
+    if (reqData.query.say === 'undefined') {
+        res.end();
+        return;
+    }
+
+    channel[0].send(reqData.query.say);
+    res.end();
+}
+
+setTimeout(function (gameData) {
+    const staticServer = new static.Server('./public');
+
     http.createServer(function (request, response) {
-        staticServer.serve(request, response);
-        //response.writeHead(200, { 'Content-Type': 'text/plain' });
-        //response.end('This bot is now woke\n');    
+        const reqData = url.parse(request.url, true);
+        console.log(reqData);
+        staticServer.serve(request, response, function (e, res) {
+            console.log(res, e);
+            if (e && (e.status === 404)) { // If the file wasn't found
+                console.log(reqData.pathname);
+                switch (reqData.pathname ) {
+                    case '/games':
+                        adminDumpGames(bot, gameData, response, reqData);
+                        break;
 
-        // DIAGNOSTIC CONSOLE???
+                    case '/game':
+                        adminDumpPlayers(bot, gameData, response, reqData);
+                        break;
+
+                    case '/speak':
+                        adminSpeak(bot, gameData, res, reqData);
+                        break;
+                }
+            }
+        });
+
+        //if (request.method === 'post') {
+        //    switch (reqData.pathname ) {
+        //        case '/speak':
+        //            adminSpeak(bot, gameData, res, reqData);
+        //    }
+        //}
 
     }).listen(8081);
 
     // Console will print the message
     console.log('Server running at http://127.0.0.1:8081');
-}, 1000 );
+}, 1000, gameData );
 
