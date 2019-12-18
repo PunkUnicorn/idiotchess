@@ -20,9 +20,9 @@ catch (error) {
 function debugDump(bot, channelID, shitToDump) {
     console.log('debugDump', shitToDump, 'channelID', channelID);
     
-    bot.channels
-        .find('id', channelID)
-        .send(JSON.stringify(shitToDump));
+    //bot.channels
+    //    .find('id', channelID)
+    //    .send(JSON.stringify(shitToDump));
 }
 
 
@@ -197,7 +197,7 @@ function openGameNegociation(bot, gameData, message, newgame) {
     bot.channels.find('id', newgame.data.channelID)
 //      .send('<@!' + newgame.data.target.id + '> You have been challenged by <@!' + newgame.data.userID + '>, do you accept? Oh it\'s <@!' + newgame.data.target.id + '>, well he wins by default I\'m afraid <@!' + newgame.data.userID + '>')
 
-        .send('<@!' + newgame.data.target.id + '> You have been challenged by <@!' + newgame.data.userID + '>, do you accept? Oh it\'s <@!' + newgame.data.target.id + '>')
+        .send('<@!' + newgame.data.target.id + '> You have been challenged by <@!' + newgame.data.userID + '>, do you accept?')
         .then(
 
                 function (result)
@@ -297,7 +297,7 @@ function getUsefulThingsFromMessage(bot, gameInfo, userID, channelID, message, o
                     break;
 
                 case 'play':
-                    verb = 'newgame';
+                    verb = cleantoken;
                     break;
 
                 case 'cancel':
@@ -312,11 +312,11 @@ function getUsefulThingsFromMessage(bot, gameInfo, userID, channelID, message, o
 
         if (verb.length === 0) {
             // if game already in play the default verb is 'move'
-            verb = gameInfo === null ? 'move' : 'newgame';
+            verb = gameInfo === null ? 'move' : 'play';
         }
 
         // for newgames, see if the player side colour has been specified
-        if (verb === 'newgame') {
+        if (verb === 'play') {
             if (token === 'black') {
                 whitePlayer = target.id;
                 blackPlayer = userID;
@@ -414,7 +414,7 @@ function processVerb(bot, gameData, message, channelID, userID, moveObjs) {
     const target = moveObjs.target;
 
     switch (moveObjs.verb) {
-        case 'newgame':
+        case 'play':
             if (isValidNewGame(bot, gameData, channelID, userID, moveObjs)) {
                 var newgame = addPossibleNewGame(bot, gameData, moveObjs);
                 openGameNegociation(bot, gameData, message, newgame);
@@ -457,7 +457,7 @@ bot.on('message', function (message) {
     if (message.author.id === bot.user.id)
         return;
 
-    const botMentions = message.mentions.users.filter(m => m.bot.id === bot.id).array();
+    const botMentions = message.mentions.users.filter(m => m.id === bot.user.id).array();
 
     // if this function is not applicable then get out of here ASAP, and don't clog up the indenting on your way out
     if (typeof botMentions === 'undefined' || botMentions === null || botMentions.length === 0) {
