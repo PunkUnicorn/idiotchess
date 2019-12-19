@@ -507,17 +507,21 @@ function adminDumpGame(bot, gameData, res, reqData) {
 }
 
 function adminSpeak(bot, gameData, res, reqData) {
+    console.log('adminSpeak', reqData);
     const channel = bot.channels.filter(f => f.id === reqData.query.channelid).array();
     if (channel.length == 0) {
+        console.log('length===0', reqData);
         res.end();
         return;
     }
 
     if (reqData.query.say === 'undefined') {
+        console.log('say === undefined', reqData);
         res.end();
         return;
     }
 
+    console.log('reqData.query.say', reqData.query.say);
     channel[0].send(reqData.query.say);
     res.end();
 }
@@ -542,7 +546,7 @@ setTimeout(function (gameData) {
                         break;
 
                     case '/speak':
-                        adminSpeak(bot, gameData, res, reqData);
+                        adminSpeak(bot, gameData, response, reqData);
                         break;
                 }
             }
