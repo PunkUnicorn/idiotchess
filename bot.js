@@ -1,4 +1,4 @@
-﻿//const Discord = require('discord.io');
+//const Discord = require('discord.io');
 const logger = require('winston');
 const Chess = require('./chess.js').Chess;
 const Discord = require('discord.js');
@@ -507,7 +507,7 @@ function adminDumpGame(bot, gameData, res, reqData) {
 }
 
 function adminSpeak(bot, gameData, res, reqData) {
-    const channel = bot.channels.filter(f => f.id === reqData.channelid).array();
+    const channel = bot.channels.filter(f => f.id === reqData.query.channelid).array();
     if (channel.length == 0) {
         res.end();
         return;
