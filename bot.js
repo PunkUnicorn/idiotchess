@@ -64,9 +64,7 @@ function addPossibleNewGame(bot, gameData, moveObjs) {
 function removeGame(bot, gameData, newgame)
 {
     const gamekey = makeGameKey(newgame.data.userID, newgame.data.target.id, newgame.data.channelID);
-    console.log('before', gameData);
     gameData.games.splice(gameData.games.indexOf(gameData.games.filter(f => f.key === gamekey)), 1);
-    console.log('after', gameData);
 }
 
 function gameInstance_isPlaying() {
@@ -109,7 +107,6 @@ function makeGameInstance() {
 }
 
 function isValidNewGame(bot, gameData, channelID, userID, moveObjs) {
-    //debugDump(bot, moveObjs.channelID, moveObjs);
     return typeof moveObjs.target !== 'undefined' && moveObjs.target !== null &&
         typeof moveObjs.playerwhite !== 'undefined' && moveObjs.playerwhite !== null &&
         typeof moveObjs.playerblack !== 'undefined' && moveObjs.playerblack !== null;
@@ -141,7 +138,7 @@ function getExistingGame(bot, gameData, targetID, messageSenderUserID, channelID
         const existing = gameData.games.filter(f => f.key = gameKey);
 
         return (existing.length === 0)
-            ? null //makeGameInstance(bot, gameData)
+            ? null
             : existing[0];
 
     }
@@ -156,10 +153,35 @@ function endOpenedNegociations(bot, gameData, newgame) {
     removeGame(bot, gameData, newgame);
 }
 
-function openGameNegociation(bot, gameData, message, newgame) {
+function isExistingGameSameAsNewGame(newgame, existingGame) {
+    console.log('newgame', newgame, 'exisiting game', existingGame);
+    return existingGame !== null && existingGame.key === newgame.key;
+}
+
+function flipYourShit(newgame, error) {
+    debugDump(bot, newgame.data.channelID, {
+        error: 'cant send challenge message from <@!' + newgame.data.target.id + '> to <@!' + newgame.data.userID + '>',
+        sorryDaveICantLetYouDoThat: true
+    });
+}
+
+function openGameNegociation(bot, gameData, message, newgame, existingGame) {
     const love_letter = '\uD83D\uDC8C';// '\u1F48C';
-    const ok = '✔️';//'\uD83C\uDD97';//'\u1F197';
+    const tick = '✔️';//'\uD83C\uDD97';//'\u1F197';
     const cross = '✖️';//'\uD83D\uDEAB'; //'\u2717';//
+    const broken_heart = '💔';
+    const hearts = '💕';
+    const anger = '💢';
+    const bell = '🔔';
+    const warning = '⚠️';
+    const exclamation = '❗';
+    const question_mark = '❓';
+    const ok = '🆗';
+    const large_red_circle = '🔴';
+    const red_triangle = '🔺';
+    const information = 'ℹ️';
+
+
 
     // check for existing game with that key
     //    reject game negociation if already a game
@@ -167,9 +189,21 @@ function openGameNegociation(bot, gameData, message, newgame) {
     // limit a user to only one game per channel (*1)
     //    then the game instance can be gleamed from the user id (who sent the message) and the channel id
 
-    const existingGame = getExistingGame(bot, gameData, newgame.data.target.id, newgame.data.userID, newgame.data.channelID);
-    if (existingGame !== null && existingGame.key !== newgame.key) {
-        debugDump(bot, newgame.data.channelID, { error: '{<@!>' + newgame.data.userID + '} already has a game in this channel.', sorryDaveICantLetYouDoThat: true });
+    if (isExistingGameSameAsNewGame(newgame, existingGame)) {
+        const msg = '<@!' + newgame.data.userID + '> already has a game in this channel.';
+        debugDump(bot, newgame.data.channelID, { error: msg, sorryDaveICantLetYouDoThat: true });
+        bot.channels.find('id', newgame.data.channelID)
+            .send(msg)
+            .then(function (result) {
+                result.react(exclamation).then(function (whatever) {
+                    result.react(anger).catch(function (error) { debugDump(bot, newgame.data.channelID, error); });
+                });
+            },
+
+            function (error) { flipYourShit(newgame, error) /* <-- on error */ }
+
+        );;
+
         return;
     }
 
@@ -198,23 +232,14 @@ function openGameNegociation(bot, gameData, message, newgame) {
 //      .send('<@!' + newgame.data.target.id + '> You have been challenged by <@!' + newgame.data.userID + '>, do you accept? Oh it\'s <@!' + newgame.data.target.id + '>, well he wins by default I\'m afraid <@!' + newgame.data.userID + '>')
 
         .send('<@!' + newgame.data.target.id + '> You have been challenged by <@!' + newgame.data.userID + '>, do you accept?')
-        .then(
-
-                function (result)
-                {
-                    result.react(ok)
-                        .then(function (whatever) {
-                            result.react(cross).catch(function (error) { debugDump(bot, newgame.data.channelID, error); });
-                        });
-                },
-
-                function (error)
-                {
-                    debugDump(bot, newgame.data.channelID, {
-                        error: 'cant send challenge message from <@!' + newgame.data.target.id + '> to <@!' + newgame.data.userID + '>',
-                        sorryDaveICantLetYouDoThat: true
-                    });
-                }
+        .then( function (result) {
+                  result.react(tick)
+                     .then(function (whatever) {
+                         result.react(cross).catch(function (error) { debugDump(bot, newgame.data.channelID, error); });
+                     });
+               },
+ 
+               function (error) { flipYourShit(newgame, error) /* <-- on error */ }
 
         );
 
@@ -255,7 +280,10 @@ function getUsefulThingsFromMessage(bot, gameInfo, userID, channelID, message, o
     var target = others[0];//only one mention is acknoledged 
     var restOfMessage = [];
     var whitePlayer = null, blackPlayer = null;
+    var timeout = 1;
+
     var isTakeBack = false;
+    var isTimeout = false;
 
     var prevTokens = [];
     var prevToken = null;
@@ -268,13 +296,20 @@ function getUsefulThingsFromMessage(bot, gameInfo, userID, channelID, message, o
 
         if (cleantoken.length === 0)
             return;
-        
+
+
         console.log('cleant', cleantoken);
 
-        if (isTakeBack) {
+
+        if (isTimeout) {
+            timeout = parseInt(cleantoken, 10);
+        } else if (isTakeBack) {
             restOfMessage.push(token);
         } else {
             switch (cleantoken) {
+                case 'timeout':
+                    isTimeout = true;
+                    break;
                 case 'move':
                 case 'info':
                 case 'resign':
@@ -352,7 +387,7 @@ function getUsefulThingsFromMessage(bot, gameInfo, userID, channelID, message, o
         /* for newgame */
         playerwhite: whitePlayer, /* userID of the white player */
         playerblack: blackPlayer, /* userID of the black player */
-        timeout: 2 /* how many minuets to wait for the game challenge to be accepted */
+        timeout /* how many minuets to wait for the game challenge to be accepted */
     };
 }
 
@@ -412,12 +447,17 @@ bot.on('ready', function () {
 
 function processVerb(bot, gameData, message, channelID, userID, moveObjs) {
     const target = moveObjs.target;
+    const targetid = (typeof target !== 'undefined' && target !== null)
+        ? target.id
+        : null;
+
+    const existingGame = getExistingGame(bot, gameData, targetid, moveObjs.userID, moveObjs.channelID);
 
     switch (moveObjs.verb) {
         case 'play':
             if (isValidNewGame(bot, gameData, channelID, userID, moveObjs)) {
                 var newgame = addPossibleNewGame(bot, gameData, moveObjs);
-                openGameNegociation(bot, gameData, message, newgame);
+                openGameNegociation(bot, gameData, message, newgame, existingGame);
             } else {
                 debugDump(bot, channelID, { error: 'Not a valid new game', sorryDaveICantLetYouDoThat: true });
             }
@@ -432,6 +472,12 @@ function processVerb(bot, gameData, message, channelID, userID, moveObjs) {
                     }
                     console.log(chess.pgn()); 
         */
+        case 'cencel':
+            if (isExistingGameSameAsNewGame(exisitingGame, newgame))
+            {
+                
+            }
+            break;
 
         default:
             break;
@@ -511,19 +557,25 @@ function adminSpeak(bot, gameData, res, reqData) {
     const channel = bot.channels.filter(f => f.id === reqData.query.channelid).array();
     if (channel.length == 0) {
         console.log('length===0', reqData);
-        res.end();
+        res.end('<html><body style="background-color:darkslategrey; color:burlywood"><div>' +
+            'Failed - no channelid query string parameter specified'
+            + '</div></body></html>');
         return;
     }
 
     if (reqData.query.say === 'undefined') {
         console.log('say === undefined', reqData);
-        res.end();
+        res.end('<html><body style="background-color:darkslategrey; color:burlywood"><div>' +
+            'Failed - nothing to say, cant find say query string parameter'
+            + '</div></body></html>');
         return;
     }
 
     console.log('reqData.query.say', reqData.query.say);
     channel[0].send(reqData.query.say);
-    res.end();
+    res.end('<html><body style="background-color:darkslategrey; color:burlywood"><div>' +
+        'WINNING' + ' idiotchess said ' + reqData.query.say
+        + '</div></body></html>');
 }
 
 setTimeout(function (gameData) {
