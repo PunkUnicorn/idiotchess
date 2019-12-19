@@ -1,4 +1,4 @@
-//const Discord = require('discord.io');
+﻿//const Discord = require('discord.io');
 const logger = require('winston');
 const Chess = require('./chess.js').Chess;
 const Discord = require('discord.js');
@@ -158,8 +158,8 @@ function endOpenedNegociations(bot, gameData, newgame) {
 
 function openGameNegociation(bot, gameData, message, newgame) {
     const love_letter = '\uD83D\uDC8C';// '\u1F48C';
-    const ok = '\uD83C\uDD97';//'\u1F197';
-    const cross = '\uD83D\uDEAB'; //'\u2717';//
+    const ok = '✔️';//'\uD83C\uDD97';//'\u1F197';
+    const cross = '✖️';//'\uD83D\uDEAB'; //'\u2717';//
 
     // check for existing game with that key
     //    reject game negociation if already a game
