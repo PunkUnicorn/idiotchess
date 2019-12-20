@@ -1,4 +1,5 @@
 # Node.js
+steps:
 - task: AzurePowerShell@5
   inputs:
     azureSubscription: 'Pay-As-You-Go (10a7b6de-a9c7-4000-857d-59a90df64616)'
