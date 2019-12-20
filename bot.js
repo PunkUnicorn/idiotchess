@@ -545,7 +545,7 @@ var botInterval = setInterval(function () {
         }
     });
 
-}, 1000 * 60 * 5);
+}, 1000 * 60 * 0.5);
 
 function processVerb(bot, gameData, message, channelID, userID, moveObjs) {
     const target = moveObjs.target;
@@ -612,7 +612,7 @@ const url = require('url');
 const safeStringify = require('fast-safe-stringify');
 
 function adminDumpGames(bot, gameData, res, reqData) {
-    res.end('<html><body style="background-color:darkslategrey; color:burlywood"><div>' + safeStringify(gameData.games) + '</div></body></html>');
+    res.end( safeStringify(gameData.games) );
 }
 
 function adminDumpGame(bot, gameData, res, reqData) {
@@ -665,7 +665,7 @@ var htmlServerInterval = setInterval(function (gameData) {
             if (e && (e.status === 404)) { // If the file wasn't found
                 console.log(reqData.pathname);
                 switch (reqData.pathname ) {
-                    case '/games':
+                    case '/gamesdata':
                         adminDumpGames(bot, gameData, response, reqData);
                         break;
 
@@ -691,5 +691,5 @@ var htmlServerInterval = setInterval(function (gameData) {
 
     // Console will print the message
     console.log('Server running at http://127.0.0.1:8081');
-}, 1000 * 50 * 7, gameData );
+}, 1000 * 60 * 1, gameData );
 

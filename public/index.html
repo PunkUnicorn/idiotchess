@@ -1,22 +1,31 @@
 ﻿<!DOCTYPE html>
 <html>
-  <head>
+<head>
     <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
     <title>title</title>
-  <link rel="stylesheet" href="//fonts.googleapis.com/css?family=font1|font2|etc" type="text/css">
-  </head>
-  <body style="background-color:darkslategrey; color:burlywood">
-  <a href="/games">Games</a>
-  <script src="//ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.min.js" type="text/javascript"></script>
-  <script type="text/javascript">
-   function autorun()
-   {
-    
-   }
-   if (document.addEventListener) document.addEventListener("DOMContentLoaded", autorun, false);
-   else if (document.attachEvent) document.attachEvent("onreadystatechange", autorun);
-   else window.onload = autorun;
-  </script>
-  </body>
+    <link rel="stylesheet" href="//fonts.googleapis.com/css?family=font1|font2|etc" type="text/css">
+</head>
+<body style="background-color:darkslategrey; color:burlywood">
+    <section style="background-color:grey;">
+        <a href="/games.html">Games</a>
+        <div>
+            <form method="get" action="/speak">
+                <label>What to say:</label><input name="say" type="text"/>
+                <label>Channel ID:</label><input name="channelid" type="number"/>
+                <input type="submit" value="Make idiotchess bot speak"/>
+            </form>
+        </div>
+        <script src="//ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.min.js" type="text/javascript"></script>
+    </section>
+
+    <script type="text/javascript">
+        function autorun() {
+
+        }
+        if (document.addEventListener) document.addEventListener("DOMContentLoaded", autorun, false);
+        else if (document.attachEvent) document.attachEvent("onreadystatechange", autorun);
+        else window.onload = autorun;
+    </script>
+</body>
 </html>
