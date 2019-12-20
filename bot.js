@@ -607,6 +607,7 @@ function makeDebugMoveObj(moveObjs) {
 
 
 const static = require('node-static');
+const fs = require('fs');
 const http = require("http");
 const url = require('url');
 const safeStringify = require('fast-safe-stringify');
@@ -625,6 +626,22 @@ function adminDumpGame(bot, gameData, res, reqData) {
     res.end('<html><body style="background-color:darkslategrey; color:burlywood"><div>' +
         safeStringify(game)
         + '</div></body></html>');
+}
+
+function adminDumpLogs(bot, gameData, res) {
+    //open bot.log
+    //return the file
+    fs.readFile('bot.log', function (err, data) {
+        res.writeHead(200, {
+            'Content-Type': 'text/html'
+        });
+        if (!err) {
+            res.write(data);
+            res.end();
+        } else {
+            res.end('error getting log file');
+        }
+    });
 }
 
 function adminSpeak(bot, gameData, res, reqData) {
@@ -671,6 +688,10 @@ var htmlServerInterval = setInterval(function (gameData) {
 
                     case '/game':
                         adminDumpPlayers(bot, gameData, response, reqData);
+                        break;
+
+                    case '/logsdata':
+                        adminDumpLogs(bot, gameData, response);
                         break;
 
                     case '/speak':
