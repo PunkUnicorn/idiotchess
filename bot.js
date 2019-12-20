@@ -459,10 +459,11 @@ logger.add(new logger.transports.Console, {
 
 logger.level = 'debug';
 
+var bot = null;
 var botInterval = setInterval(function () {
     clearInterval(botInterval);
     // Initialize Discord Bot
-    var bot = new Discord.Client();
+    bot = new Discord.Client();
     bot.login(auth.token);
 
 
