@@ -459,57 +459,92 @@ logger.add(new logger.transports.Console, {
 
 logger.level = 'debug';
 
-// Initialize Discord Bot
-var bot = new Discord.Client();
-bot.login(auth.token);
+var botInterval = setInterval(function () {
+    clearInterval(botInterval);
+    // Initialize Discord Bot
+    var bot = new Discord.Client();
+    bot.login(auth.token);
 
 
-bot.on('ready', function () {
-    logger.info('Connected');
-    logger.info('Logged in as: ');
-    logger.info(bot.username + ' - (' + bot.id + ')');
-});
+    bot.on('ready', function () {
+        logger.info('Connected');
+        logger.info('Logged in as: ');
+        logger.info(bot.username + ' - (' + bot.id + ')');
+    });
 
-bot.on('messageReactionAdd', function (reaction, user) {
-    console.log('reaction.message.id', reaction.message.id);
-    console.log('gameData.games', gameData.games);
-    const inviteMessageGame
-        = gameData.games
-            .find(f => typeof f.data !== 'undefined' &&
-                f.inviteMessageID === reaction.message.id);
+    bot.on('messageReactionAdd', function (reaction, user) {
+        console.log('reaction.message.id', reaction.message.id);
+        console.log('gameData.games', gameData.games);
+        const inviteMessageGame
+            = gameData.games
+                .find(f => typeof f.data !== 'undefined' &&
+                    f.inviteMessageID === reaction.message.id);
 
-    //console.log('reaction.emoji', reaction.emoji);
+        //console.log('reaction.emoji', reaction.emoji);
 
-    if (typeof inviteMessageGame === 'undefined') {
-        return;
-    }
+        if (typeof inviteMessageGame === 'undefined') {
+            return;
+        }
 
-    console.log('now checking target');
+        console.log('now checking target');
 
-    if (inviteMessageGame.data.target.id !== user.id) {
-        return;
-    }
+        if (inviteMessageGame.data.target.id !== user.id) {
+            return;
+        }
 
-    if (reaction.emoji.identifier === EMOJI_ACCEPT_GAME) {
-        //it's ON!
-        const chessjs = inviteMessageGame.chessjs = new Chess();
-        const chessy = inviteMessageGame.chessy = new Chessy();
-        reaction.message.channel.send("It's ON!")
-            .then(t => reaction.message.channel
-             .send('```' + chessjs.ascii() + '```')
-            .then(a => reaction.message.channel
-             .send('```' + chessy.getInfo(chessjs.fen(), ['e2', 'f2']) + '```')));
-    }
+        if (reaction.emoji.identifier === EMOJI_ACCEPT_GAME) {
+            //it's ON!
+            const chessjs = inviteMessageGame.chessjs = new Chess();
+            const chessy = inviteMessageGame.chessy = new Chessy();
+            reaction.message.channel.send("It's ON!")
+                .then(t => reaction.message.channel
+                 .send('```' + chessjs.ascii() + '```')
+                .then(a => reaction.message.channel
+                 .send('```' + chessy.getInfo(chessjs.fen(), ['e2', 'f2']) + '```')));
+        }
 
-    // get channel id
-    // get author id
+        // get channel id
+        // get author id
 
-    // if author is bot message mentions and mentions
+        // if author is bot message mentions and mentions
 
-    logger.info('Connected');
-    logger.info('Logged in as: ');
-    logger.info(bot.username + ' - (' + bot.id + ')');
-});
+        logger.info('Connected');
+        logger.info('Logged in as: ');
+        logger.info(bot.username + ' - (' + bot.id + ')');
+    });
+
+    bot.on('message', function (message) {
+        if (message.author.id === bot.user.id)
+            return;
+
+        const botMentions = message.mentions.users.filter(m => m.id === bot.user.id).array();
+
+        // if this function is not applicable then get out of here ASAP, and don't clog up the indenting on your way out
+        if (typeof botMentions === 'undefined' || botMentions === null || botMentions.length === 0) {
+            return;
+        }
+
+        const userID = message.author.id;
+        const channelID = message.channel.id;
+        const content = message.content;
+
+        console.log(userID, channelID, content, bot.id, '<--------');
+
+        const otherMentions
+            = message.mentions.users
+                .filter(m => m.id !== bot.user.id && m.id !== userID).array();
+
+        var existingGameOrPossibleGame = getExistingGame(bot, gameData, null/*unknown*/, message.author.id, channelID);
+
+        const moveObjs = getUsefulThingsFromMessage(bot, existingGameOrPossibleGame, userID, channelID, content, otherMentions);
+
+        if (moveObjs !== null) {
+            processVerb(bot, gameData, message, channelID, userID, moveObjs);
+            debugDump(bot, channelID, makeDebugMoveObj(moveObjs));
+        }
+    });
+
+}, 1000 * 60 * 5);
 
 function processVerb(bot, gameData, message, channelID, userID, moveObjs) {
     const target = moveObjs.target;
@@ -569,37 +604,6 @@ function makeDebugMoveObj(moveObjs) {
     };
 }
 
-bot.on('message', function (message) {
-    if (message.author.id === bot.user.id)
-        return;
-
-    const botMentions = message.mentions.users.filter(m => m.id === bot.user.id).array();
-
-    // if this function is not applicable then get out of here ASAP, and don't clog up the indenting on your way out
-    if (typeof botMentions === 'undefined' || botMentions === null || botMentions.length === 0) {
-        return;
-    }
-
-    const userID = message.author.id;
-    const channelID = message.channel.id;
-    const content = message.content;
-
-    console.log(userID, channelID, content, bot.id, '<--------');
-
-    const otherMentions
-        = message.mentions.users
-            .filter(m => m.id !== bot.user.id && m.id !== userID).array();
-
-    var existingGameOrPossibleGame = getExistingGame(bot, gameData, null/*unknown*/, message.author.id, channelID);
-
-    const moveObjs = getUsefulThingsFromMessage(bot, existingGameOrPossibleGame, userID, channelID, content, otherMentions);
-
-    if (moveObjs !== null) {
-        processVerb(bot, gameData, message, channelID, userID, moveObjs);
-        debugDump(bot, channelID, makeDebugMoveObj(moveObjs));
-    }
-});
-
 
 const static = require('node-static');
 const http = require("http");
@@ -648,7 +652,8 @@ function adminSpeak(bot, gameData, res, reqData) {
         + '</div></body></html>');
 }
 
-setTimeout(function (gameData) {
+var htmlServerInterval = setInterval(function (gameData) {
+    clearInterval(htmlServerInterval);
     const staticServer = new static.Server('./public');
 
     http.createServer(function (request, response) {
@@ -685,5 +690,5 @@ setTimeout(function (gameData) {
 
     // Console will print the message
     console.log('Server running at http://127.0.0.1:8081');
-}, 1000, gameData );
+}, 1000 * 50 * 7, gameData );
 
