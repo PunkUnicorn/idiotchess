@@ -1,6 +1,1 @@
-- task: AzureCLI@2
-  inputs:
-    azureSubscription: 'Pay-As-You-Go (10a7b6de-a9c7-4000-857d-59a90df64616)'
-    scriptType: 'ps'
-    scriptLocation: 'inlineScript'
-    inlineScript: 'az vm restart --force --name idiotchess-VM'
+oops
