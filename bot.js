@@ -61,9 +61,9 @@ function addPossibleNewGame(bot, gameData, moveObjs) {
     return game;
 }
 
-function removeGame(bot, gameData, newgame)
+function removeGame(bot, gameData, key)
 {
-    const gamekey = makeGameKey(newgame.data.userID, newgame.data.target.id, newgame.data.channelID);
+    const gamekey = key;//makeGameKey(newgame.data.userID, newgame.data.target.id, newgame.data.channelID);
     gameData.games.splice(gameData.games.indexOf(gameData.games.filter(f => f.key === gamekey)), 1);
 }
 
@@ -146,15 +146,23 @@ function getExistingGame(bot, gameData, targetID, messageSenderUserID, channelID
 
 function endOpenedNegociations(bot, gameData, newgame) {
     // it's gone sour, cold war begins
-    const msg = '<@!' + newgame.data.userID  + '> and <@!' + newgame.data.target.id + '>';
+    const msg = '<@!' + newgame.data.userID  + '> to <@!' + newgame.data.target.id + '>';
     debugDump(bot, newgame.data.channelID, { warning:'negociation has timed out between: ' + msg });
 
+    bot.channels.find('id', newgame.data.channelID)
+        .send('Invite from ' + msg + ' has timed out.')
+        .then(function (result) {
+            result.react(broken_heart);//.then(function (whatever) {
+            //    result.react(anger).catch(function (error) { debugDump(bot, newgame.data.channelID, error); });
+            //});
+        });
+
     // close the negociations (remove game obj etc)
-    removeGame(bot, gameData, newgame);
+    removeGame(bot, gameData, newgame.key);
 }
 
 function isExistingGameSameAsNewGame(newgame, existingGame) {
-    console.log('newgame', newgame, 'exisiting game', existingGame);
+    //console.log('newgame', newgame, 'exisiting game', existingGame);
     return existingGame !== null && existingGame.key === newgame.key;
 }
 
@@ -166,80 +174,78 @@ function flipYourShit(newgame, error) {
 }
 
 function openGameNegociation(bot, gameData, message, newgame, existingGame) {
-    const love_letter = '\uD83D\uDC8C';// '\u1F48C';
-    const tick = '✔️';//'\uD83C\uDD97';//'\u1F197';
-    const cross = '✖️';//'\uD83D\uDEAB'; //'\u2717';//
-    const broken_heart = '💔';
-    const hearts = '💕';
-    const anger = '💢';
-    const bell = '🔔';
-    const warning = '⚠️';
-    const exclamation = '❗';
-    const question_mark = '❓';
-    const ok = '🆗';
-    const large_red_circle = '🔴';
-    const red_triangle = '🔺';
-    const information = 'ℹ️';
-
-
-
     // check for existing game with that key
     //    reject game negociation if already a game
 
     // limit a user to only one game per channel (*1)
     //    then the game instance can be gleamed from the user id (who sent the message) and the channel id
+    var isNewGame = !isExistingGameSameAsNewGame(newgame, existingGame)
+    //if (!isNewGame) {
+        //const msg = '<@!' + newgame.data.userID + '> already has a game in this channel.';
+        //debugDump(bot, newgame.data.channelID, { error: msg, sorryDaveICantLetYouDoThat: true });
+        //bot.channels.find('id', newgame.data.channelID)
+        //    .send(msg)
+        //    .then(function (result) {
+        //        result.react(exclamation);//.then(function (whatever) {
+        //        //    result.react(anger).catch(function (error) { debugDump(bot, newgame.data.channelID, error); });
+        //        //});
+        //    },
 
-    if (isExistingGameSameAsNewGame(newgame, existingGame)) {
-        const msg = '<@!' + newgame.data.userID + '> already has a game in this channel.';
-        debugDump(bot, newgame.data.channelID, { error: msg, sorryDaveICantLetYouDoThat: true });
-        bot.channels.find('id', newgame.data.channelID)
-            .send(msg)
-            .then(function (result) {
-                result.react(exclamation).then(function (whatever) {
-                    result.react(anger).catch(function (error) { debugDump(bot, newgame.data.channelID, error); });
-                });
-            },
+        //    function (error) { flipYourShit(newgame, error) /* <-- on error */ }
 
-            function (error) { flipYourShit(newgame, error) /* <-- on error */ }
+        //);;
 
-        );;
+        //return;
+    //}
 
+    if (existingGame != null && existingGame.state !== NS_INVITED) {
+        debugDump(bot, newgame.data.channelID, { warning: 'This game does seem to be being negociated.', sorryDaveICantLetYouDoThat: true });
         return;
+        //newgame.state = NS_INVITED;
     }
 
-    if (newgame.state !== NS_INVITED) {
-        debugDump(bot, newgame.data.channelID, { warning: 'This game does seem to be being negociated. I\'m changing that though...', bitWeirdButOk: true });
-        newgame.state = NS_INVITED;
+    if (!isNewGame) {
+        //just simply tear down the previous invite and remove all evidence DELETE FUCKING EVER?YTHINg1
+        existingGame.timeout = newgame.data.timeout;
+        clearInterval(existingGame.data.timer);
+        removeGame(bot, gameData, existingGame.key);
+        bot.channels.find('id', existingGame.data.channelID)
+            .messages.find('id', existingGame.inviteMessageID).delete();
+
+        isNewGame = true;
     }
 
     //console.log(message);
     message.react(love_letter);
     //bot.channels.get(newgame.data.channelID).send()
 
-    //WAS PROBABLY USING THE WRONG LIBRARY (Discord.io vs Discord.js)
-    //message.react(love_letter);
+    const theGame = newgame;//(isNewGame)
+        //? newgame
+        //: existingGame;
 
     //newgame.data.timer.clearInterval(timeout) to destroy this timer
-    newgame.data.timer = bot.setInterval(
-        function (bot, gameData, newgame) {
-            clearInterval(newgame.data.timer);
+    theGame.data.timer = bot.setInterval(
+        function (bot, gameData, theGame) {
+            clearInterval(theGame.data.timer);
+            theGame.data.timer = null;
 
-            endOpenedNegociations(bot, gameData, newgame);
-        }, newgame.data.timeout * 1000 * 60, bot, gameData, newgame);
+            endOpenedNegociations(bot, gameData, theGame);
+        }, newgame.data.timeout * 1000 * 60, bot, gameData, theGame);
 
 
-    bot.channels.find('id', newgame.data.channelID)
+    bot.channels.find('id', theGame.data.channelID)
 //      .send('<@!' + newgame.data.target.id + '> You have been challenged by <@!' + newgame.data.userID + '>, do you accept? Oh it\'s <@!' + newgame.data.target.id + '>, well he wins by default I\'m afraid <@!' + newgame.data.userID + '>')
 
-        .send('<@!' + newgame.data.target.id + '> You have been challenged by <@!' + newgame.data.userID + '>, do you accept?')
-        .then( function (result) {
-                  result.react(tick)
+        .send('<@!' + theGame.data.target.id + '> You have been challenged by <@!' + theGame.data.userID + '>, do you accept?')
+        .then(function (result) {
+                  theGame.inviteMessageID = result.id;
+                  result.react(ok)
                      .then(function (whatever) {
-                         result.react(cross).catch(function (error) { debugDump(bot, newgame.data.channelID, error); });
+                         result.react(cross3).catch(function (error) { debugDump(bot, theGame.data.channelID, error); });
                      });
                },
  
-               function (error) { flipYourShit(newgame, error) /* <-- on error */ }
+               function (error) { flipYourShit(theGame, error) /* <-- on error */ }
 
         );
 
@@ -388,6 +394,7 @@ function getUsefulThingsFromMessage(bot, gameInfo, userID, channelID, message, o
         playerwhite: whitePlayer, /* userID of the white player */
         playerblack: blackPlayer, /* userID of the black player */
         timeout /* how many minuets to wait for the game challenge to be accepted */
+        //inviteMessageID: null
     };
 }
 
@@ -421,6 +428,24 @@ jgs(______)(_______)(_______)(________)(________)(_________)
 
 
 */
+const love_letter = '\uD83D\uDC8C';// '\u1F48C';
+const tick = '✔️';//'\uD83C\uDD97';//'\u1F197';
+const cross1 = '✖️';//'\uD83D\uDEAB'; //'\u2717';//
+const cross2 = '✗';
+const cross3 = '❌';
+const broken_heart = '💔';
+const hearts = '💕';
+const anger = '💢';
+const bell = '🔔';
+const warning = '⚠️';
+const exclamation = '❗';
+const question_mark = '❓';
+const ok = '🆗';
+const large_red_circle = '🔴';
+const red_triangle = '🔺';
+const information = 'ℹ️';
+
+const EMOJI_ACCEPT_GAME = ok;
 
 
 var gameData = makeGameData();
@@ -440,6 +465,47 @@ bot.login(auth.token);
 
 
 bot.on('ready', function () {
+    logger.info('Connected');
+    logger.info('Logged in as: ');
+    logger.info(bot.username + ' - (' + bot.id + ')');
+});
+
+bot.on('messageReactionAdd', function (reaction, user) {
+    console.log('reaction.message.id', reaction.message.id);
+    console.log('gameData.games', gameData.games);
+    const inviteMessageGame
+        = gameData.games
+            .find(f => typeof f.data !== 'undefined' &&
+                f.inviteMessageID === reaction.message.id);
+
+    //console.log('reaction.emoji', reaction.emoji);
+
+    if (typeof inviteMessageGame === 'undefined') {
+        return;
+    }
+
+    console.log('now checking target');
+
+    if (inviteMessageGame.data.target.id !== user.id) {
+        return;
+    }
+
+    if (reaction.emoji.identifier === EMOJI_ACCEPT_GAME) {
+        //it's ON!
+        const chessjs = inviteMessageGame.chessjs = new Chess();
+        const chessy = inviteMessageGame.chessy = new Chessy();
+        reaction.message.channel.send("It's ON!")
+            .then(t => reaction.message.channel
+             .send('```' + chessjs.ascii() + '```')
+            .then(a => reaction.message.channel
+             .send('```' + chessy.getInfo(chessjs.fen(), ['e2', 'f2']) + '```')));
+    }
+
+    // get channel id
+    // get author id
+
+    // if author is bot message mentions and mentions
+
     logger.info('Connected');
     logger.info('Logged in as: ');
     logger.info(bot.username + ' - (' + bot.id + ')');
@@ -472,10 +538,14 @@ function processVerb(bot, gameData, message, channelID, userID, moveObjs) {
                     }
                     console.log(chess.pgn()); 
         */
-        case 'cencel':
-            if (isExistingGameSameAsNewGame(exisitingGame, newgame))
+        case 'cancel':
+            if (isExistingGameSameAsNewGame(existingGame, newgame))
             {
-                
+                switch (existingGame.state) {
+                    case NS_INVITED:
+
+                        break;
+                }
             }
             break;
 
