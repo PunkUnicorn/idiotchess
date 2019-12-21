@@ -321,8 +321,11 @@ function tellThemTheListOfGames(bot, xgameData, moveObjs) {
 
 function chessyInfo(bot, gameData, channelID, userID, infoThing, fen) {
     console.log('chessy dump', fen, infoThing);
+
+    const infoString = JSON.stringify(chessy.getInfo(fen, [infoThing]), null, '\t');
+
     bot.channels.find('id', channelID)
-        .send('*Info for* **' + infoThing + '**' + '```' + JSON.stringify(chessy.getInfo(fen, [ infoThing ])) + '```')
+        .send('*Info for* **' + infoThing + '**' + '```' + infoString + '```')
         .catch (function (error) { debugDump(bot, inviteMessageGame.data.channelID, error); });
 }
 
@@ -420,8 +423,9 @@ function getUsefulThingsFromMessage(bot, gameInfo, userID, channelID, message, o
                     verb = cleantoken;
                     break;
 
+                case 'quit':
                 case 'cancel':
-                    verb = cleantoken;
+                    verb = 'cancel';
                     break;
 
                 default:
@@ -587,9 +591,9 @@ var botInterval = setInterval(function () {
         const chessjs = inviteMessageGame.chessjs = new Chess();
         reaction.message.channel.send("It's ON!")
             .then(t => reaction.message.channel
-                .send('```' + chessjs.ascii() + '```')
+                .send('```' + chessjs.ascii() + '```'))
             //.then(a => reaction.message.channel
-            //    .send('```' + JSON.stringify(chessy.getInfo(chessjs.fen(), ['e2', 'f2'])) + '```')))
+            //    .send('```' + JSON.stringify(chessy.getInfo(chessjs.fen(), ['e2', 'f2'])) + '```') )))
             .catch(function (error) { debugDump(bot, inviteMessageGame.data.channelID, error); });
 
 
