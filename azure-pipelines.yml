@@ -1,37 +1,43 @@
 # Node.js
+steps:
+- task: AzurePowerShell@5
+  inputs:
+    azureSubscription: 'Pay-As-You-Go (10a7b6de-a9c7-4000-857d-59a90df64616)'
+    ScriptType: 'InlineScript'
+    Inline: 'az vm restart --force --name idiotchess-VM --resource-group Play01'
 
 # Build a general Node.js project with npm.
 # Add steps that analyze code, save build artifacts, deploy, and more:
 # https://docs.microsoft.com/azure/devops/pipelines/languages/javascript
 
-trigger:
-- master
+# trigger:
+# - master
 
-pool:
-  vmImage: 'ubuntu-latest'
+# pool:
+#   vmImage: 'ubuntu-latest'
 
-steps:
-- task: NodeTool@0
-  inputs:
-    versionSpec: '10.x'
-  displayName: 'Install Node.js'
-
-- script: |
-    npm install
-#    npm run build
-  displayName: 'npm install'
-
-- task: CopyFiles@2
-  inputs:
-   Contents: '**'
-   TargetFolder: '$(Build.ArtifactStagingDirectory)'
-    
-# - task: ArchiveFiles@2
+# steps:
+# - task: NodeTool@0
 #   inputs:
-#     rootFolderOrFile: '$(Build.BinariesDirectory)'
-#     includeRootFolder: true
-#     archiveType: 'zip'
-#     archiveFile: '$(Build.ArtifactStagingDirectory)/$(Build.BuildId).zip'
-#     replaceExistingArchive: true
+#     versionSpec: '10.x'
+#   displayName: 'Install Node.js'
 
-- task: PublishBuildArtifacts@1
+# - script: |
+#     npm install
+# #    npm run build
+#   displayName: 'npm install'
+
+# - task: CopyFiles@2
+#   inputs:
+#    Contents: '**'
+#    TargetFolder: '$(Build.ArtifactStagingDirectory)'
+    
+# # - task: ArchiveFiles@2
+# #   inputs:
+# #     rootFolderOrFile: '$(Build.BinariesDirectory)'
+# #     includeRootFolder: true
+# #     archiveType: 'zip'
+# #     archiveFile: '$(Build.ArtifactStagingDirectory)/$(Build.BuildId).zip'
+# #     replaceExistingArchive: true
+
+# - task: PublishBuildArtifacts@1
