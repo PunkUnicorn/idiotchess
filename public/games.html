@@ -22,7 +22,7 @@
         function autorun() {
             $.get("/gamesdata", function (data) {
                 let transform = {
-                    '<>': 'li', 'id':'$(*)', 'html': [{
+                    '<>': 'li', 'html': [{
                         '<>': 'span', 'html': [{ '<>': 'span', 'html': [{ '<>': 'span', 'html': [{'<>': 'span'}]}] }] 
                     }]
                 };

@@ -1,0 +1,5 @@
+Chessy by lropero
+
+https://github.com/lropero/chessy.js.git
+
+https://github.com/lropero/chessy.js#readme

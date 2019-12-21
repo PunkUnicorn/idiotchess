@@ -1,0 +1,4 @@
+# the setting to make 
+# sudo crontab -e
+#https://www.simplified.guide/linux/automatically-run-program-on-startup#automatically-run-program-on-linux-startup-via-cron
+@reboot cd /home/punkunicorn/idiotchess && cp bot.log bot.previous.log && git pull && node bot.js | tee bot.log

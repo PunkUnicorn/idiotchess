@@ -1,7 +1,8 @@
 {
   "ExpandedNodes": [
-    ""
+    "",
+    "\\public"
   ],
-  "SelectedNode": "\\bot.js",
+  "SelectedNode": "\\public\\logs.html",
   "PreviewInSolutionExplorer": false
 }
