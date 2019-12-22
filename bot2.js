@@ -1,8 +1,8 @@
-const TAFFY = require('taffy').taffy;
+﻿const TAFFY = require('taffy');
 
 const BLANK_GAME = { games: [] };
 
-var games = TAFFY(  BLANK_GAME  );
+var games = TAFFY( BLANK_GAME );
 
 function dbMakeKey(userid, channelid) {
     return [userid, channelid].join("-");
@@ -10,7 +10,13 @@ function dbMakeKey(userid, channelid) {
 
 function dbAddGameAuthor(authorid, channelid, game) {
     if (typeof game === 'undefined') game = BLANK_GAME;
-    games.join(TAFFY(game).merge({ authorid, channelid, key: dbMakeKey(authorid, channelid) }));
+    console.log(game);
+    games.insert({
+        key: dbMakeKey(authorid, channelid),
+        channelid,
+
+        authorid
+    });
 }
 
 function dbUpdateGameTarget(authorid, channelid, targetid, game) {
@@ -18,17 +24,16 @@ function dbUpdateGameTarget(authorid, channelid, targetid, game) {
 
     const targetkey = dbMakeKey(targetid, channelid);
 
-    games.join(
-        TAFFY(game).merge({
-            key: targetKey,
-            targetid,
-            authorkey: dbMakeKey(authorid, channelid)
-        })
-    );
+    games.insert({
+        key: targetkey,
+        channelid,
 
-    // Back-reference to the author row
+        targetid,
+        authorkey: dbMakeKey(authorid, channelid)
+    });
+
     games({ key: dbMakeKey(authorid, channelid) })
-        .update({ targetkey });
+        .update({ targetkey })
 }
 
 /* updates all properties for where this user is an author or target */
@@ -40,32 +45,43 @@ function dbUpdateForGame(userid, channelid, game) {
 /* gets all game rows where the user is an author or target */
 function dbGetGameUserKeys(userid, channelid) {
     return [
-        games.db({ authorid: userid, channelid }).select(f => { f.key }).first(),
-        games.db({ targetid: userid, channelid }).select(f => { f.key }).first()
+        games({ authorid: userid, channelid }).select(f => { f.key })[0],
+        games({ targetid: userid, channelid }).select(f => { f.key })[0]
     ];
 }
 
 /* updates individual user properties e.g. */
 function dbUpdateForUser(userid, channelid, updates) {
     const key = dbMakeKey(userid, channelid);
-    games.db({ key }).update(updates);
+    games({ key }).update(updates);
 }
 
 /* removes all traces of the game a user is an author or target of */
 function dbRemoveGame(userid, channelid) {
-    const allEffectedUsers
-        = games.db({ userid })
-        .join(games.db({ targetid: userid }));
-
-    allEffectedUsers.remove();
+    games(dbGetGameUserKeys(userid, channelid)).remove();
 }
 
 
 
 console.log(process);
 
+dbAddGameAuthor(1, 20, { stuff: 'stuff1' });
+dbUpdateGameTarget(1, 20, 300, { targetstuff:'targetstuff1' });
+console.log(games().stringify(null, '\t'))
+
+dbAddGameAuthor(4, 50, { stuff: 'stuffA' });
+dbUpdateGameTarget(4, 50, 600, { targetstuff: 'targetstuff2' });
+
+dbAddGameAuthor(7, 80, { stuff: 'stuff()' });
 
 
+console.log(games().stringify(null, '\t'))
+
+const gamekeys = dbGetGameUserKeys(1, 20);
+console.log('gamekeys', gamekeys);
+
+dbUpdateForUser(4, 50, { stuff: 'NOT STUFFA' });
+console.log(games().stringify(null, '\t'))
 
 process.exit(0);
 return 0;
