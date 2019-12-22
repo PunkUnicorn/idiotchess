@@ -1,7 +1,80 @@
+const TAFFY = require('taffy').taffy;
+
+const BLANK_GAME = { games: [] };
+
+var games = TAFFY(  BLANK_GAME  );
+
+function dbMakeKey(userid, channelid) {
+    return [userid, channelid].join("-");
+}
+
+function dbAddGameAuthor(authorid, channelid, game) {
+    if (typeof game === 'undefined') game = BLANK_GAME;
+    games.join(TAFFY(game).merge({ authorid, channelid, key: dbMakeKey(authorid, channelid) }));
+}
+
+function dbUpdateGameTarget(authorid, channelid, targetid, game) {
+    if (typeof game === 'undefined') game = BLANK_GAME;
+
+    const targetkey = dbMakeKey(targetid, channelid);
+
+    games.join(
+        TAFFY(game).merge({
+            key: targetKey,
+            targetid,
+            authorkey: dbMakeKey(authorid, channelid)
+        })
+    );
+
+    // Back-reference to the author row
+    games({ key: dbMakeKey(authorid, channelid) })
+        .update({ targetkey });
+}
+
+/* updates all properties for where this user is an author or target */
+function dbUpdateForGame(userid, channelid, game) {
+    if (typeof game === 'undefined') game = BLANK_GAME;
+    games( dbGetGameUserKeys(userid, channelid) ).update(game);
+}
+
+/* gets all game rows where the user is an author or target */
+function dbGetGameUserKeys(userid, channelid) {
+    return [
+        games.db({ authorid: userid, channelid }).select(f => { f.key }).first(),
+        games.db({ targetid: userid, channelid }).select(f => { f.key }).first()
+    ];
+}
+
+/* updates individual user properties e.g. */
+function dbUpdateForUser(userid, channelid, updates) {
+    const key = dbMakeKey(userid, channelid);
+    games.db({ key }).update(updates);
+}
+
+/* removes all traces of the game a user is an author or target of */
+function dbRemoveGame(userid, channelid) {
+    const allEffectedUsers
+        = games.db({ userid })
+        .join(games.db({ targetid: userid }));
+
+    allEffectedUsers.remove();
+}
+
+
+
+console.log(process);
+
+
+
+
+process.exit(0);
+return 0;
+
 //const Discord = require('discord.io');
 const logger = require('winston');
 const Chess = require('./chess.js').Chess;
 const chessy = require('./chessy.js')
+
 const Discord = require('discord.js');
 
 var auth = null;
