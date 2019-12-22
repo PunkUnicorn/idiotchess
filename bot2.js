@@ -209,7 +209,7 @@ function cancelGameNegociation(channelid, messageauthorid, optionalGameKeysInThi
 
 function timeoutOpenedNegociations(message, channelid, messageauthorid, targetid) {
     const timeoutMsg = 'Invitation timedout';
-    return tellUsers(channelid, [messageauthorid, target], timeoutMsg, broken_heart, message);
+    return tellUsers(channelid, [messageauthorid, targetid], timeoutMsg, broken_heart, message);
 }
 
 function openGameNegociation(message, channelid, messageauthorid, targetid, invitetimeoutmins) {
@@ -241,7 +241,7 @@ function openGameNegociation(message, channelid, messageauthorid, targetid, invi
                                     const acceptemojireactionname = okEmojiReaction.emoji.name;
                                     const rejectemojureactionname = crossEmojiReaction.emoji.name;
 
-                                    console.log('okEmojiReaction', okEmojiReaction);
+                                    //console.log('okEmojiReaction', okEmojiReaction);
 
                                     const newGameDataObj = {
                                         challengemessageid,
@@ -249,10 +249,13 @@ function openGameNegociation(message, channelid, messageauthorid, targetid, invi
                                         rejectemojureactionname
                                     };
 
-                                    console.log('newGameDataObj', newGameDataObj);
+                                    //console.log('newGameDataObj', newGameDataObj);
 
+                                    console.log("SSAAAAVVVVIIIINGGG!!!");
                                     repo.timerAdd(channelid, messageauthorid, timer);
-                                    repo.dbAddGameAuthor(messageauthorid, channelid, newGameDataObj);
+                                    repo.dbAddGameAuthor(messageauthorid, channelid, newGameDataObj, targetid);
+                                    console.log("SAVED1!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
+                                    console.log(repo.games().get());
                                 });
                         })
                 });
@@ -307,7 +310,7 @@ function tellUsers(channelid, userid_array, speak, optionalemoji, optionalmessag
 
     const channel = typeof optionalmessage === 'undefined'
         ? bot.channels.find('id', channelid)
-        : message.channel;
+        : optionalmessage.channel;
 
     const addressStr = '<@!' + userid_array.join('> and <@!') + '>, ';
 
@@ -585,13 +588,20 @@ var botInterval = setInterval(function () {
         bot.on('messageReactionAdd', function (reaction, user) {
             if (user.id === bot.user.id) return;
 
-            const key = repo.dbGetForUser(user.id, reaction.message.channel.id)
+            const userid = user.id.toString();
+            const channelid = reaction.message.channel.id;
 
-            if (key.length === 0) {
+            console.log('user.id, reaction.message.channel.id', userid, channelid);
+            const keys = repo.games({ targetid: userid }).select('key', 'targetkey');//repo.dbGetGameUserKeys(userid, channelid)
+
+            console.log('messageReactionAdd', repo.games({ targetid: userid }).get());
+            console.log('keys', keys, repo.dbGetGameUserKeys(userid, channelid));
+            console.log(keys);
+            if (keys.length === 0) {
                 return;
             }
 
-            const author = repo.dbGetGame([key])[0];
+            const author = repo.dbGetGame(keys)[0];
             console.log(author);
 
             if (typeof author === 'undefined') {
@@ -602,8 +612,8 @@ var botInterval = setInterval(function () {
                 return;
             }
 
-            const isAcceptance = reaction.id === author.acceptemojireactionid;
-            const isRejection = reaction.id === author.rejectemojureactionid;
+            const isAcceptance = reaction.emoji.name === author.acceptemojireactionname;
+            const isRejection = reaction.emoji.name === author.rejectemojureactionname;
 
             if (isAcceptance) {
                 //it's ON!

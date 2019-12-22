@@ -1,14 +1,18 @@
 ﻿const TAFFY = require('taffy');
 
-var games = TAFFY();
+const games = TAFFY();
 
 
 function dbMakeKey(userid, channelid) {
     return [userid, channelid].join("-");
 }
 
-function dbAddGameAuthor(authorid, channelid, stuff) {
+function dbAddGameAuthor(authorid, channelid, stuff, targetid) {
     if (typeof stuff === 'undefined') stuff = {};
+    if (typeof targetid !== 'undefined' && targetid !== null) {
+        stuff.targetid = targetid;
+        stuff.targetkey = dbMakeKey(targetid, channelid);
+    }
 
     const key = dbMakeKey(authorid, channelid);
 
@@ -37,8 +41,8 @@ function dbUpdateGameTarget(authorid, channelid, targetid, targetStuff) {
         authorkey
     }).update(targetStuff);
 
-    games({ key: authorkey })
-        .update({ targetid, targetkey })
+    //games({ key: authorkey })
+    //    .update({ targetid, targetkey });
 }
 
 /* updates all properties for where this user is an author or target */
@@ -55,7 +59,7 @@ function dbGetGameUserKeys(userid, channelid) {
         .select('authorkey', 'targetkey', 'key');
 
     if (keys.length > 0) {
-        return keys[0].filter(f => typeof f !== 'undefined');
+        return keys.filter(f => typeof f !== 'undefined');
     }
     return [];
 }
@@ -76,6 +80,10 @@ function dbGetGame(keys) {
     return typeof result === 'undefined'
         ? [[{}]]
         : result;
+}
+
+function dbGetAll() {
+    return games().get();
 }
 
 function dbGetForUser(userid, channelid) {
@@ -128,20 +136,26 @@ function runTests() {
 
 module.exports = {
     dbMakeKey,
+
     dbAddGameAuthor,
+
     dbUpdateGameTarget,
     dbUpdateForGame,
     dbUpdateForUser,
+
     dbRemoveGame,
+
     dbGetGameUserKeys,
     dbGetGame,
     dbGetForUser,
+    dbGetAll,
 
     timerAdd,
     timerGet,
     timerClear,
 
-    runTests
+    runTests,
+    games
 };
 
 //runTests();
