@@ -74,12 +74,26 @@ function dbRemoveGame(userid, channelid) {
 function dbGetGame(keys) {
     const result = games({ key: keys }).get();
     return typeof result === 'undefined'
-        ? []
+        ? [[{}]]
         : result;
 }
 
 function dbGetForUser(userid, channelid) {
     return games({ key: dbMakeKey(userid, channelid) }).get();
+}
+
+const timerMap = new Map();
+
+function timerAdd(channelid, messageauthorid, timer) {
+    return timerMap.set(dbMakeKey(messageauthorid, channelid), timer);
+}
+
+function timerGet(channelid, messageauthorid) {
+    return timerMap.get(dbMakeKey(messageauthorid, channelid));
+}
+
+function timerClear(channelid, messageauthorid) {
+    return timerMap.delete(dbMakeKey(messageauthorid, channelid));
 }
 
 function pretty(data) {
@@ -122,6 +136,11 @@ module.exports = {
     dbGetGameUserKeys,
     dbGetGame,
     dbGetForUser,
+
+    timerAdd,
+    timerGet,
+    timerClear,
+
     runTests
 };
 

@@ -229,26 +229,30 @@ function openGameNegociation(message, channelid, messageauthorid, targetid, invi
                             challengeMessage.react(cross3)
                                 .then(function (crossEmojiReaction) {
 
+                                    // Timeout timer
+                                    const timer = setInterval(
+                                        function (channelid, messageauthorid, targetid) {
+                                            destroyInviteTimer(channelid, messageauthorid);
+                                            timeoutOpenedNegociations(message, channelid, messageauthorid, targetid)
+                                                .catch(console.log);
+                                        }, invitetimeoutmins * 1000 * 60, channelid, messageauthorid, targetid);
+
+                                    const challengemessageid = challengeMessage.id;
+                                    const acceptemojireactionname = okEmojiReaction.emoji.name;
+                                    const rejectemojureactionname = crossEmojiReaction.emoji.name;
+
+                                    console.log('okEmojiReaction', okEmojiReaction);
+
                                     const newGameDataObj = {
-                                        challengemessageid: challengeMessage.id,
-
-                                        acceptemojireactionid: okEmojiReaction.id,
-                                        rejectemojureactionid: crossEmojiReaction.id,
-
-                                        // Timeout timer
-                                        timer: setInterval(
-                                            function (channelid, messageauthorid, targetid) {
-                                                destroyInviteTimer(channelid, messageauthorid);
-
-                                                timeoutOpenedNegociations(message, channelid, messageauthorid, targetid)
-                                                    .catch(console.log);
-
-                                            }, invitetimeoutmins * 1000 * 60, channelid, messageauthorid, targetid)
-
+                                        challengemessageid,
+                                        acceptemojireactionname,
+                                        rejectemojureactionname
                                     };
 
-                                    repo.dbAddGameAuthor(messageauthorid, channelid, newGameDataObj);
+                                    console.log('newGameDataObj', newGameDataObj);
 
+                                    repo.timerAdd(channelid, messageauthorid, timer);
+                                    repo.dbAddGameAuthor(messageauthorid, channelid, newGameDataObj);
                                 });
                         })
                 });
@@ -579,14 +583,17 @@ var botInterval = setInterval(function () {
         });
 
         bot.on('messageReactionAdd', function (reaction, user) {
-            console.log('reaction.message.id', reaction.message.id);
-            const key = repo.dbMakeKey(user.id, reaction.message.channel.id);
+            if (user.id === bot.user.id) return;
+
+            const key = repo.dbGetForUser(user.id, reaction.message.channel.id)
 
             if (key.length === 0) {
                 return;
             }
 
             const author = repo.dbGetGame([key])[0];
+            console.log(author);
+
             if (typeof author === 'undefined') {
                 return;
             }
@@ -595,7 +602,7 @@ var botInterval = setInterval(function () {
                 return;
             }
 
-            const isAcceptance = reaction.id === author.acceptancereactionid;
+            const isAcceptance = reaction.id === author.acceptemojireactionid;
             const isRejection = reaction.id === author.rejectemojureactionid;
 
             if (isAcceptance) {
@@ -652,9 +659,7 @@ var botInterval = setInterval(function () {
 }, 1000);// * 15);
 
 function processVerb(message, channelid, messageauthorid, gameKeysInThisChannel, parsedMessage) {
-
     const existingGame = repo.dbGetGame(gameKeysInThisChannel);
-    console.log('existingGame', existingGame, 'with', channelid, messageauthorid, gameKeysInThisChannel);
     const isExistingGame = existingGame.length > 0;
 
     switch (parsedMessage.verb) {
