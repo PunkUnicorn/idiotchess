@@ -64,6 +64,11 @@ function dbGetGameUserKeys(userid, channelid) {
     return [];
 }
 
+/* gets all game rows where the user is an author or target */
+function dbGetAuthorKeyFromTarget(targetid, channelid) {
+    return games({ targetid, channelid }).get();
+}
+
 /* updates individual user properties e.g. */
 function dbUpdateForUser(userid, channelid, updates) {
     const key = dbMakeKey(userid, channelid);
@@ -145,6 +150,7 @@ module.exports = {
 
     dbRemoveGame,
 
+    dbGetAuthorKeyFromTarget,
     dbGetGameUserKeys,
     dbGetGame,
     dbGetForUser,

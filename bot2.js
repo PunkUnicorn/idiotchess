@@ -222,11 +222,11 @@ function openGameNegociation(message, channelid, messageauthorid, targetid, invi
                 .then(function (challengeMessage) {
 
                     // OK accept emojii
-                    challengeMessage.react(ok)
+                    challengeMessage.react(EMOJI_ACCEPT_GAME)
                         .then(function (okEmojiReaction) {
 
                             // Cross reject emoji
-                            challengeMessage.react(cross3)
+                            challengeMessage.react(EMOJI_REJECT_GAME)
                                 .then(function (crossEmojiReaction) {
 
                                     // Timeout timer
@@ -237,26 +237,15 @@ function openGameNegociation(message, channelid, messageauthorid, targetid, invi
                                                 .catch(console.log);
                                         }, invitetimeoutmins * 1000 * 60, channelid, messageauthorid, targetid);
 
-                                    const challengemessageid = challengeMessage.id;
-                                    const acceptemojireactionname = okEmojiReaction.emoji.name;
-                                    const rejectemojureactionname = crossEmojiReaction.emoji.name;
+                                        const challengemessageid = challengeMessage.id;
 
-                                    //console.log('okEmojiReaction', okEmojiReaction);
+                                        const newGameDataObj = {
+                                            challengemessageid
+                                        };
 
-                                    const newGameDataObj = {
-                                        challengemessageid,
-                                        acceptemojireactionname,
-                                        rejectemojureactionname
-                                    };
-
-                                    //console.log('newGameDataObj', newGameDataObj);
-
-                                    console.log("SSAAAAVVVVIIIINGGG!!!");
-                                    repo.timerAdd(channelid, messageauthorid, timer);
-                                    repo.dbAddGameAuthor(messageauthorid, channelid, newGameDataObj, targetid);
-                                    console.log("SAVED1!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
-                                    console.log(repo.games().get());
-                                });
+                                        repo.timerAdd(channelid, messageauthorid, timer);
+                                        repo.dbAddGameAuthor(messageauthorid, channelid, newGameDataObj, targetid);
+                                    });
                         })
                 });
         });
@@ -295,7 +284,7 @@ function tellUser(channelid, tellthisuserid, speak, optionalemoji, optionalmessa
 
     const channel = typeof optionalmessage === 'undefined'
         ? bot.channels.find('id', channelid)
-        : message.channel;
+        : optionalmessage.channel;
 
     return channel.send('<@!' + tellthisuserid + '> ' + speak)
         .then(function (messageresult) {
@@ -555,6 +544,7 @@ const red_triangle = '🔺';
 const information = 'ℹ️';
 
 const EMOJI_ACCEPT_GAME = ok;
+const EMOJI_REJECT_GAME = cross3;
 
 
 //const gameData = makeGameData();
@@ -588,46 +578,36 @@ var botInterval = setInterval(function () {
         bot.on('messageReactionAdd', function (reaction, user) {
             if (user.id === bot.user.id) return;
 
-            const userid = user.id.toString();
+            const userid = user.id;
             const channelid = reaction.message.channel.id;
 
             console.log('user.id, reaction.message.channel.id', userid, channelid);
-            const keys = repo.games({ targetid: userid }).select('key', 'targetkey');//repo.dbGetGameUserKeys(userid, channelid)
+            const authorGame = repo.dbGetAuthorKeyFromTarget(userid, channelid);
 
-            console.log('messageReactionAdd', repo.games({ targetid: userid }).get());
-            console.log('keys', keys, repo.dbGetGameUserKeys(userid, channelid));
-            console.log(keys);
-            if (keys.length === 0) {
+            console.log('authorGame', authorGame);
+
+            if (typeof authorGame === 'undefined' || authorGame === null || authorGame.length === 0) {
                 return;
-            }
+            }            
 
-            const author = repo.dbGetGame(keys)[0];
-            console.log(author);
+            const isAcceptance = reaction.emoji.name == EMOJI_ACCEPT_GAME;
+            const isRejection = reaction.emoji.name == EMOJI_REJECT_GAME;
 
-            if (typeof author === 'undefined') {
-                return;
-            }
-
-            if (user.id != /* ✔️ */ author.targetid) {
-                return;
-            }
-
-            const isAcceptance = reaction.emoji.name === author.acceptemojireactionname;
-            const isRejection = reaction.emoji.name === author.rejectemojureactionname;
+            console.log('isAcceptance', isAcceptance, reaction.emoji.name == EMOJI_ACCEPT_GAME, reaction.emoji.name === EMOJI_ACCEPT_GAME);
+            console.log('isRejection', isRejection);
+            tellUser(channelid, userid, "Target clicked was: " + reaction.emoji.name + ', and the user ' + userid + ', and the game: ' + JSON.stringify(authorGame), reaction.emoji.name);
 
             if (isAcceptance) {
                 //it's ON!
-                const chessjs = inviteMessageGame.chessjs = new Chess();
+                const chessjs = new Chess();
                 reaction.message.channel.send("It's ON!")
                     .then(t => reaction.message.channel.send('```' + chessjs.ascii() + '```'))
-                    .catch(function (error) { debugDump(bot, inviteMessageGame.data.channelID, error); })
                     .then(function () {
-                        clearInterval(inviteMessageGame.data.timer);
-                        inviteMessageGame.data.timer = null;
-                        gameData_setGameState(bot, gameData, inviteMessageGame.key, NS_ACCEPTED);
+                        tellUser(channelid, userid, 'This code is old world code, from about two weeks ago. It all needs re-writing.');
+                        //gameData_setGameState(bot, gameData, inviteMessageGame.key, NS_ACCEPTED);
 
-                        const debugGame = gameData_getGamesForUserInThisChannel(bot, gameData, user.id, inviteMessageGame.data.channelID);
-                        debugDump(bot, reaction.message.channel.id, { 'reactionComlete': true, dump: debugGame });
+                        //const debugGame = gameData_getGamesForUserInThisChannel(bot, gameData, user.id, inviteMessageGame.data.channelID);
+                        //debugDump(bot, reaction.message.channel.id, { 'reactionComlete': true, dump: debugGame });
                     });
             } else if (isRejection) {
                 cancelGameNegociation(reaction.message.channe.id, author.authorid);
