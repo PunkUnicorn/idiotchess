@@ -47,26 +47,30 @@ function dbUpdateGameTarget(authorid, channelid, targetid, targetStuff) {
 
 /* updates all properties for where this user is an author or target */
 function dbUpdateForGame(userid, channelid, game) {
-    if (typeof game === 'undefined') game = BLANK_GAME;
-    games( dbGetGameUserKeys(userid, channelid) ).update(game);
+    if (typeof game === 'undefined') {
+        console.log('invalid game in dbUpdateForGame'); throw 'invalid game in dbUpdateForGame';
+    }
+
+    games([{ key: dbGetGameKeysForUser(userid, channelid) }] ).update(game);
 }
 
 /* gets all game rows where the user is an author or target */
-function dbGetGameUserKeys(userid, channelid) {
+function dbGetGameKeysForUser(userid, channelid) {
     const findKey = { key: dbMakeKey(userid, channelid) };
 
     const keys = games(findKey)
         .select('authorkey', 'targetkey', 'key');
 
     if (keys.length > 0) {
-        return keys.filter(f => typeof f !== 'undefined');
+        const definedKeys = keys[0].filter(f => typeof f !== 'undefined');
+        return [ ...new Set(definedKeys) ];
     }
     return [];
 }
 
-/* gets all game rows where the user is an author or target */
-function dbGetAuthorKeyFromTarget(targetid, channelid) {
-    return games({ targetid, channelid }).get();
+/* gets all game rows that 'targetid' and 'channelid' match */
+function dbGetGameFromTarget(targetid, channelid) {
+    return games({ targetid, channelid }).get().filter(f => typeof f !== 'undefined');
 }
 
 /* updates individual user properties e.g. */
@@ -77,7 +81,7 @@ function dbUpdateForUser(userid, channelid, updates) {
 
 /* removes all traces of the game a user is an author or target of */
 function dbRemoveGame(userid, channelid) {
-    games(dbGetGameUserKeys(userid, channelid)).remove();
+    games([{ key: dbGetGameKeysForUser(userid, channelid) }]).remove();
 }
 
 function dbGetGame(keys) {
@@ -91,8 +95,8 @@ function dbGetAll() {
     return games().get();
 }
 
-function dbGetForUser(userid, channelid) {
-    return games({ key: dbMakeKey(userid, channelid) }).get();
+function dbGetForUserKey(userid, channelid) {
+    return games({ key: dbMakeKey(userid, channelid) }).get().filter(f => typeof f !== 'undefined');
 }
 
 const timerMap = new Map();
@@ -107,6 +111,10 @@ function timerGet(channelid, messageauthorid) {
 
 function timerClear(channelid, messageauthorid) {
     return timerMap.delete(dbMakeKey(messageauthorid, channelid));
+}
+
+function timerGetAll() {
+    return timerMap.values();
 }
 
 function pretty(data) {
@@ -125,7 +133,7 @@ function runTests() {
     dbAddGameAuthor(7, 80, { stuff: 'stuff()' });
     console.log('\n', 'third', pretty(games));
 
-    const gamekeys = dbGetGameUserKeys(1, 20);
+    const gamekeys = dbGetGameKeysForUser(1, 20);
     console.log('\n', 'gamekeys 1, 20', gamekeys);
     console.log('\n', 'games for keys', gamekeys.join(" and "), JSON.parse(games({ key: gamekeys }).stringify()));
 
@@ -150,15 +158,16 @@ module.exports = {
 
     dbRemoveGame,
 
-    dbGetAuthorKeyFromTarget,
-    dbGetGameUserKeys,
+    dbGetGameFromTarget,
+    dbGetGameKeysForUser,
     dbGetGame,
-    dbGetForUser,
+    dbGetForUserKey,
     dbGetAll,
 
     timerAdd,
     timerGet,
     timerClear,
+    timerGetAll,
 
     runTests,
     games

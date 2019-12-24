@@ -28,6 +28,8 @@ function parseMessage(bot, messageuserid, channelid, content, allNonBotMentions,
     var isListMode = false;
     var isInfoMode = false;
 
+    var isWhite = true;
+
     var prevTokens = [];
     var prevToken = null;
     decodeMe.forEach(token => {
@@ -117,13 +119,7 @@ function parseMessage(bot, messageuserid, channelid, content, allNonBotMentions,
         // for newgames, see if the player side colour has been specified
         if (verb === 'play') {
             if (token === 'black') {
-                whitePlayer = target.id;
-                blackPlayer = messageuserid;
-            } else if (token === 'white') {
-                whitePlayer = messageuserid;
-                blackPlayer = (typeof target === 'undefined' || target === null)
-                    ? null
-                    : target.id;
+                isWhite = false;
             }
         }
 
@@ -152,8 +148,7 @@ function parseMessage(bot, messageuserid, channelid, content, allNonBotMentions,
         /* Then depending on verb... */
 
         /* play */
-        playerwhite: whitePlayer, /* userID of the white player */
-        playerblack: blackPlayer, /* userID of the black player */
+        isWhite,
         timeout, /* how many minuets to wait for the game challenge to be accepted */
 
         /* list */
