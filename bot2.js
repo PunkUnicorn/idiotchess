@@ -293,8 +293,94 @@ function tellChannel(guildid, channelid, speak, optionalemoji, optionalchannel) 
         });
 }
 
+const emoji_numbers = '🔢';
+const emoji_a = '🇦';
+const emoji_b = '🇧';
+const emoji_c = '🇨';
+const emoji_d = '🇩';
+const emoji_e = '🇪';
+const emoji_f = '🇫';
+const emoji_g = '🇬';
+const emoji_h = '🇭';
 
-function showBoard(guildid, channelid, existingGame) {
+const emoji_letters = '🔡';
+const emoji_1 = '1️⃣';
+const emoji_2 = '2️⃣';
+const emoji_3 = '3️⃣';
+const emoji_4 = '4️⃣';
+const emoji_5 = '5️⃣';
+const emoji_6 = '6️⃣';
+const emoji_7 = '7️⃣';
+const emoji_8 = '8️⃣';
+
+const emoji_direction = '';
+const empji_uparrow = '⬆️';
+const empji_uprightarrow = '↗️';
+const empji_rightarrow = '➡️';
+const empji_downrightarrow = '↘️';
+const empji_downarrow = '⬇️';
+const empji_downleftarrow = '↙️';
+const empji_leftarrow = '⬅️';
+const empji_upleftarrow = '↖️';
+const empji_rightcurvingdownarrow = '↩️';
+const empji_leftcurvingdownarrow1 = '↪️';
+const empji_rightcurvinguparrow = '⤴️';
+const empji_leftcurvingdownarrow2 = '⤵️';
+const empji_arrow = '';
+
+
+//https://www.iemoji.com/emoji-cheat-sheet/comical
+
+const emoji_symbols = '🔣';
+const emoji_information = 'ℹ️';
+
+const emoji_trophy = '🏆';
+const emoji_medal1 ='🎖️';
+const emoji_medal2 = '🏅';
+const emoji_medal_first = '🥇';
+const emoji_medal_second = '🥈';
+const emoji_medal_third = '🥉';
+const emoji_yarn = '🧶';
+const emoji_handshake = '🤝';
+const emoji_speakinghead = '🗣️';
+const emoji_key1 = '🗝️';
+const emoji_key2 = '🔑';
+const emoji_scroll = '📜';
+const emoji_hammer = '🔨';
+const emoji_nutandbolt = '🔩';
+const emoji_writinghand = '✍️';
+const emoji_wrench = '🔧';
+const emoji_tools = '🛠';
+const emoji_gear = '⚙️';
+const emoji_castle = '🏰';
+const emoji_pawprints = '🐾';
+const emoji_ribbon = '🎗️';
+const emoji_yarn = '🧶';
+consr emoji_play = '▶️';
+
+const EMOJI_MOVE = emoji_play;
+const EMOJI_INFO = emoji_information;
+const EMOJI_SETTINGS = emoji_gear;
+
+
+const emoji_board_row = [ emoji_1, emoji_2, emoji_3, emoji_4, emoji_5, emoji_6, emoji_7, emoji_8 ];
+const emoji_board_column = [ emoji_a, emoji_b, emoji_c, emoji_d, emoji_e, emoji_f, emoji_g, emoji_h ];
+const emoji_board_toolkit = [ EMOJI_MOVE, EMOJI_INFO, EMOJI_SETTINGS  ];
+
+function addMoveHelperEmojis(guildid, boardMessage, existingGame) {
+    var returns = [];
+    emoji_board_row
+    .concat(emoji_board_column)
+    .concat( emoji_board_toolkit)
+        .forEach(function(item, index) {
+            returns.push( boardMessage.react(item) );
+        });
+        
+    return Prmoise.all(returns);
+}
+
+
+function showBoard(guildid, channel, existingGame) {
     if (typeof existingGame.chessjs === 'undefined' || existingGame.chessjs === null) return;
 
     const isWhiteNext = existingGame.chessjs.turn() === 'w';
@@ -302,8 +388,9 @@ function showBoard(guildid, channelid, existingGame) {
         ? isWhiteNext ? existingGame.authorid : existingGame.targetid
         : isWhiteNext ? existingGame.targetid : existingGame.authorid;
     
-    return bot.channels.find('id', channelid)
+    return message
         .send('```' + existingGame.chessjs.ascii() + '```' + '\n<@' + whonextid + '> to play...')
+        .then(sentMessage => addMoveHelperEmojis(guildid, sentMessage, existingGame);
         //.catch(console.log);
 }
 
@@ -376,7 +463,7 @@ function reactGameInvite(guildid, channel, userid, authorid, isAcceptance, isWhi
     (====)  (=====)  (=====)  (======)  (======)  (=======)
     }===={  }====={  }====={  }======{  }======{  }======={
 jgs(______)(_______)(_______)(________)(________)(_________)
-
+ 
 
 */
 
@@ -402,7 +489,6 @@ const information = 'ℹ️';
 
 const EMOJI_ACCEPT_GAME = ok;
 const EMOJI_REJECT_GAME = cross3;
-
 
 //const gameData = makeGameData();
 
@@ -649,7 +735,7 @@ function processVerb(guildid, message, channelid, messageauthorid, gameKeysInThi
 
         case 'board':
             if (isExistingGame) {
-                showBoard(guildid, channelid, existingGame[0])
+                showBoard(guildid, message.channel, existingGame[0])
                     .catch(console.log);
             }
             break;
