@@ -76,7 +76,7 @@ function flipYourShit(newgame, error) {
 }
 
 /* destroy the invite timer, and also optionally update the properties in the last parameter while setting the timer to null */
-function destroyInviteTimer(channelid, messageauthorid, removefromdb, alsoupdatethese) {
+function destroyInviteTimer(guildid, channelid, messageauthorid, removefromdb, alsoupdatethese) {
     if (typeof removefromdb === 'undefined') {
         removefromdb = false;
     }
@@ -84,36 +84,36 @@ function destroyInviteTimer(channelid, messageauthorid, removefromdb, alsoupdate
         alsoupdatethese = {};
     }
 
-    const timer = repo.timerGet(channelid, messageauthorid);
+    const timer = repo.timerGet(guildid, channelid, messageauthorid);
     console.log('destroyInviteTimer', timer);
     if (timer !== null) {
         clearInterval(timer);
-        repo.timerClear(channelid, messageauthorid);
+        repo.timerClear(guildid, channelid, messageauthorid);
         if (removefromdb) {            
             console.log('alsoupdatethese', alsoupdatethese);
-            repo.dbUpdateForUser(messageauthorid, channelid, alsoupdatethese);
+            repo.dbUpdateForUser(guildid, messageauthorid, channelid, alsoupdatethese);
         }
     }
-    console.log('repo.dbGetGameKeysForUser(messageauthorid, channelid)', repo.dbGetGameKeysForUser(messageauthorid, channelid));
+    console.log('repo.dbGetGameKeysForUser(messageauthorid, channelid)', repo.dbGetGameKeysForUser(guildid, messageauthorid, channelid));
 }
 
-function cancelGame(channelid, messageauthorid, options) {
+function cancelGame(guildid, channelid, messageauthorid, options) {
     options = typeof options === 'undefined' ? {} : options;
 
     const optionalGameKeysInThisChannel = options.optionalGameKeysInThisChannel;
     const optionalMessage = options.optionalMessage;
 
     const game = typeof optionalGameKeysInThisChannel === 'undefined'
-        ? repo.dbGetGame(repo.dbGetGameKeysForUser(messageauthorid, channelid))
-        : repo.dbGetGame(optionalGameKeysInThisChannel);
+        ? repo.dbGetGame(guildid, repo.dbGetGameKeysForUser(guildid, messageauthorid, channelid))
+        : repo.dbGetGame(guildid, optionalGameKeysInThisChannel);
 
     if (game.length > 0) {
-        destroyInviteTimer(channelid, messageauthorid);
-        repo.dbRemoveGame(messageauthorid, channelid);
+        destroyInviteTimer(guildid, channelid, messageauthorid);
+        repo.dbRemoveGame(guildid, messageauthorid, channelid);
 
         const authorsGame = game.filter(f => f.isAuthor);
         if (authorsGame.length === 0) {
-            return tellUser(channelid, messageauthorid, question_mark + ' *error* : no games, wut ' + question_mark, question_mark, optionalMessage);
+            return tellUser(guildid, channelid, messageauthorid, question_mark + ' *error* : no games, wut ' + question_mark, question_mark, optionalMessage);
         }
 
         console.log('cancelGame', game, authorsGame[0], '<-- cancelGame');
@@ -127,6 +127,7 @@ function cancelGame(channelid, messageauthorid, options) {
                 '>';
 
         return tellUser(
+            guildid, 
             channelid,
             messageauthorid,
             msg,
@@ -137,6 +138,7 @@ function cancelGame(channelid, messageauthorid, options) {
             return optionalMessage.react(question_mark);
         } else {
             return tellUser(
+                guildid, 
                 channelid,
                 messageauthorid,
                 question_mark);
@@ -144,12 +146,12 @@ function cancelGame(channelid, messageauthorid, options) {
     }
 }
 
-function timeoutOpenedNegociations(message, channelid, messageauthorid, targetid) {
+function timeoutOpenedNegociations(guildid, message, channelid, messageauthorid, targetid) {
     const timeoutMsg = ', your invitation has timed out';
-    return tellUsers(channelid, [messageauthorid, targetid], timeoutMsg, broken_heart, message);
+    return tellUsers(guildid, channelid, [messageauthorid, targetid], timeoutMsg, broken_heart, message);
 }
 
-function openGameNegociation(message, channelid, messageauthorid, targetid, invitetimeoutmins, iswhite) {
+function openGameNegociation(guildid, message, channelid, messageauthorid, targetid, invitetimeoutmins, iswhite) {
 
     return message.react(love_letter)
         .then(function (reaction) {
@@ -168,12 +170,12 @@ function openGameNegociation(message, channelid, messageauthorid, targetid, invi
 
                                     // Interval timeout
                                     const timer = setInterval(
-                                        function (channelid, messageauthorid, targetid) {
-                                            cancelGame(channelid, messageauthorid, { optionalMessage: message })
-                                                .then(t => timeoutOpenedNegociations(message, channelid, messageauthorid, targetid))
+                                        function (guildid, channelid, messageauthorid, targetid) {
+                                            cancelGame(guildid, channelid, messageauthorid, { optionalMessage: message })
+                                                .then(t => timeoutOpenedNegociations(guildid, message, channelid, messageauthorid, targetid))
                                                 .catch(console.log);
 
-                                        }, invitetimeoutmins * 1000 * 60, channelid, messageauthorid, targetid);
+                                        }, invitetimeoutmins * 1000 * 60, guildid, channelid, messageauthorid, targetid);
 
                                     const challengemessageid = challengeMessage.id;
                                     const dateStarted = Date.now();
@@ -185,19 +187,19 @@ function openGameNegociation(message, channelid, messageauthorid, targetid, invi
                                         gameStarted: dateStarted
                                     };
 
-                                    repo.timerAdd(channelid, messageauthorid, timer);
-                                    repo.dbAddGameAuthor(messageauthorid, channelid, newGameDataObj, targetid);
+                                    repo.timerAdd(guildid, channelid, messageauthorid, timer);
+                                    repo.dbAddGameAuthor(guildid, messageauthorid, channelid, newGameDataObj, targetid);
                                 });
                         })
                 });
         });
 }
 
-function tellThemTheListOfGames(channelid, userid, message) {
-    const allTheirGames = repo.dbGetGame(repo.dbGetGameKeysForUser(userid /*, wayt - leve this out to get all channels --> channelid*/));
+function tellThemTheListOfGames(guildid, channelid, userid, message) {
+    const allTheirGames = repo.dbGetGame(guildid, repo.dbGetGameKeysForUser(guildid, userid /*, wayt - leve this out to get all channels --> channelid*/));
 
     if (allTheirGames.length === 0) {
-        return tellUser(channelid, userid, ' *You have no games*', information, message);
+        return tellUser(guildid, channelid, userid, ' *You have no games*', information, message);
     }
     //console.log('allTheirGames ', allTheirGames);
 
@@ -206,16 +208,17 @@ function tellThemTheListOfGames(channelid, userid, message) {
             .filter(f => f.isAuthor)
             .map(function (val) {
 
-                const channel = bot.channels
+                const channel = message.channel.guild.channels
                     .find(f => f.id == val.channelid)
                     .name;
 
-                const author = bot.users
-                    .find(f => f.id == val.authorid)
-                    .username;
+                const author = message.channel.guild.members
+                    .find(f => f.user.id == val.authorid)
+                    .user.username;
 
-                const target = bot.users
-                    .find(f => f.id == val.targetid);
+                const target = message.channel.guild.members
+                    .find(f => f.user.id == val.targetid)
+                    .user;
 
                 const targetUsername = typeof target !== 'undefined'
                     ? target.username
@@ -230,14 +233,14 @@ function tellThemTheListOfGames(channelid, userid, message) {
             });
     
     const msg = '*List:*  \n\t' + displayTheirGamesInProgress.join("\n\t");
-    return bot.channels.find('id', channelid)
-        .send(msg + '\n\n ...also: ' + JSON.stringify(repo.dbGetAll()[0]))
+    return message.channel//bot.channels.find('id', channelid)
+        .send(msg + '\n\n ...also: ' + JSON.stringify(repo.dbGetAll(guildid)[0]))
         .then(function (result) {
-            result.react(information).catch(function (error) { debugDump(bot, moveObjs.channelID, error); });
+            result.react(information).catch(console.log);
         });
 }
 
-function tellUser(channelid, tellthisuserid, speak, optionalemoji, optionalmessage) {
+function tellUser(guildid, channelid, tellthisuserid, speak, optionalemoji, optionalmessage) {
 
     const channel = typeof optionalmessage === 'undefined'
         ? bot.channels.find('id', channelid)
@@ -255,7 +258,7 @@ function tellUser(channelid, tellthisuserid, speak, optionalemoji, optionalmessa
         })
 }
 
-function tellUsers(channelid, userid_array, speak, optionalemoji, optionalmessage) {
+function tellUsers(guildid, channelid, userid_array, speak, optionalemoji, optionalmessage) {
     if (userid_array.length === 0) {
         return;
     }
@@ -276,7 +279,7 @@ function tellUsers(channelid, userid_array, speak, optionalemoji, optionalmessag
         });
 }
 
-function tellChannel(channelid, speak, optionalemoji, optionalchannel) {
+function tellChannel(guildid, channelid, speak, optionalemoji, optionalchannel) {
 
     const channel = typeof optionalchannel === 'undefined'
         ? bot.channels.find('id', channelid)
@@ -291,7 +294,9 @@ function tellChannel(channelid, speak, optionalemoji, optionalchannel) {
 }
 
 
-function showBoard(channelid, existingGame) {
+function showBoard(guildid, channelid, existingGame) {
+    if (typeof existingGame.chessjs === 'undefined' || existingGame.chessjs === null) return;
+
     const isWhiteNext = existingGame.chessjs.turn() === 'w';
     const whonextid = existingGame.isWhite
         ? isWhiteNext ? existingGame.authorid : existingGame.targetid
@@ -302,7 +307,7 @@ function showBoard(channelid, existingGame) {
         //.catch(console.log);
 }
 
-function chessyInfo(channelid, messageauthorid, gameKeysInThisChannel, infoThing, chessjs, channel) {
+function chessyInfo(guildid, channelid, messageauthorid, gameKeysInThisChannel, infoThing, chessjs, channel) {
     const fen = chessjs.fen();
     const infoString = JSON.stringify(chessy.getInfo(fen, [infoThing]), null, '\t');
 
@@ -317,7 +322,7 @@ function chessyInfo(channelid, messageauthorid, gameKeysInThisChannel, infoThing
     return channel.send('Info for **' + infoThing + '**:  ' + '```' + infoString + '\n' + moves + '```')
 }
 
-function reactGameInvite(channel, userid, authorid, isAcceptance, isWhite) {
+function reactGameInvite(guildid, channel, userid, authorid, isAcceptance, isWhite) {
     const channelid = channel.id;
 
     if (isAcceptance) {
@@ -325,18 +330,23 @@ function reactGameInvite(channel, userid, authorid, isAcceptance, isWhite) {
         //it's ON!
 
         const chessjs = new Chess();
-        destroyInviteTimer(channelid, authorid, true, { chessjs }/*<-- which also updates the author row with this */);
+        destroyInviteTimer(guildid, channelid, authorid, true, { chessjs }/*<-- which also updates the author row with this */);
 
-        repo.dbUpdateGameTarget(authorid, channelid, userid, { isWhite });
-        repo.dbUpdateForGame(authorid, channelid, { state: NS_ACCEPTED });
+        repo.dbUpdateGameTarget(guildid, authorid, channelid, userid, { isWhite });
+        repo.dbUpdateForGame(guildid, authorid, channelid, { state: NS_ACCEPTED });
 
-        console.log('reactGameInvite', repo.dbGetGame(repo.dbGetGameKeysForUser(authorid, channelid)), 'and then', repo.dbGetForUserKey(authorid, channelid)[0]);
+        // CHECK ITS SAVED HERE
+        console.log('react gamne unvite', repo.dbGetAll(guildid));
 
-        return channel.send("It's ON!")
-            .then(t => showBoard(channelid, repo.dbGetForUserKey(authorid, channelid)[0]));
+        const game = repo.dbGetForUserKey(guildid, authorid, channelid);
+        console.log(game);
+        //console.log('reactGameInvite', guildid, repo.dbGetGame(guildid, keys), 'and then', keys[0]);
+
+        return channel.send("It's ON! ")
+            .then(t => showBoard(guildid, channelid, game[0]));
 
     } else {
-        return cancelGame(channelid, authorid);
+        return cancelGame(guildid, channelid, authorid);
     }
 }
 
@@ -416,11 +426,12 @@ function startBot() {
             bot = new Discord.Client();
             bot.login(auth.token);
 
-
             bot.on('ready', function () {
                 logger.info('Connected');
                 logger.info('Logged in as: ');
                 logger.info(bot.username + ' - (' + bot.id + ')');
+
+                bot.guilds.forEach(function (f) { repo.dbMakeDb(f.id); console.log('ready', f);});
             });
 
             bot.on('messageReactionAdd', function (reaction, user) {
@@ -435,15 +446,17 @@ function startBot() {
                     return;
                 }
 
+                const guildid = reaction.message.channel.guild.id;
+                console.log('messageReactionAdd', guildid);
                 const userid = user.id;
                 const channelid = reaction.message.channel.id;
 
-                const authorGame = repo.dbGetGameFromTarget(userid, channelid);
+                const authorGame = repo.dbGetGameFromTarget(guildid, userid, channelid);
                 if (authorGame.length === 0) {
                     return;
                 }
 
-                reactGameInvite(reaction.message.channel, userid, authorGame[0].authorid, isAcceptance, !authorGame[0].isWhite)
+                reactGameInvite(guildid, reaction.message.channel, userid, authorGame[0].authorid, isAcceptance, !authorGame[0].isWhite)
                     .catch(console.log);
             });
 
@@ -458,6 +471,7 @@ function startBot() {
                     return;
                 }
 
+                const guildid = message.channel.guild.id;
                 const messageauthorid = message.author.id;
                 const channelid = message.channel.id;
                 const content = message.content;
@@ -468,11 +482,11 @@ function startBot() {
                     = message.mentions.users
                         .filter(m => m.id !== bot.user.id && m.id !== messageauthorid).array();
 
-                const gameKeysInThisChannel = repo.dbGetGameKeysForUser(messageauthorid, channelid);
+                const gameKeysInThisChannel = repo.dbGetGameKeysForUser(guildid, messageauthorid, channelid);
 
                 const parsedMessage = parser.parseMessage(bot, messageauthorid, channelid, content, allNonBotMentions, gameKeysInThisChannel);
 
-                processVerb(message, channelid, messageauthorid, gameKeysInThisChannel, parsedMessage);
+                processVerb(guildid, message, channelid, messageauthorid, gameKeysInThisChannel, parsedMessage);
 
             });
         } catch (err) {
@@ -484,7 +498,7 @@ function startBot() {
 startBot();
 
 
-function processVerbPlay(message, channelid, messageauthorid, gameKeysInThisChannel, parsedMessage, existingGame, isExistingGame) {
+function processVerbPlay(guildid, message, channelid, messageauthorid, gameKeysInThisChannel, parsedMessage, existingGame, isExistingGame) {
     if (!isExistingGame) {
         console.log('/* not an existing game */');
         if (parsedMessage.targetid == null) {
@@ -492,6 +506,7 @@ function processVerbPlay(message, channelid, messageauthorid, gameKeysInThisChan
             console.log('/* they want to play but have not said with who, abort... */');
 
             tellUser(
+                guildid, 
                 channelid,
                 messageauthorid,
                 //' I can\'t see who you want to play with' + '\n> @' + bot.user.username + ' play @their name',
@@ -504,7 +519,7 @@ function processVerbPlay(message, channelid, messageauthorid, gameKeysInThisChan
 
             console.log('/* no existing game, start a new one: make an invite */');
 
-            openGameNegociation(message, channelid, messageauthorid, parsedMessage.targetid, parsedMessage.timeout, parsedMessage.isWhite)
+            openGameNegociation(guildid, message, channelid, messageauthorid, parsedMessage.targetid, parsedMessage.timeout, parsedMessage.isWhite)
                 .catch(function (err) { console.log(err); });
 
         }
@@ -515,32 +530,32 @@ function processVerbPlay(message, channelid, messageauthorid, gameKeysInThisChan
 
             console.log('/* they have a game invite open *from* someone else, cancel that and make a new invite */');
 
-            cancelGame(channelid, messageauthorid, { optionalGameKeysInThisChannel: gameKeysInThisChannel, optionalMessage: message })
+            cancelGame(guildid, channelid, messageauthorid, { optionalGameKeysInThisChannel: gameKeysInThisChannel, optionalMessage: message })
                 .then(function (result) {
-                    openGameNegociation(message, channelid, messageauthorid, parsedMessage.targetid, parsedMessage.timeout, parsedMessage.isWhite)
+                    openGameNegociation(guildid, message, channelid, messageauthorid, parsedMessage.targetid, parsedMessage.timeout, parsedMessage.isWhite)
                         .catch(console.log);
                 })
-                .catch(function (err) { console.log(err); });
+                .catch(console.log);
 
         } else if (existingGame[0].authorid === parsedMessage.messageauthorid) {
 
             console.log('/* they have aready invited this person, so reset the invite to these new parameters */');
 
-            reOpenGameNegociation(message, channelid, messageauthorid, gameKeysInThisChannel, parsedMessage.timeout, parsedMessage.isWhite)
+            reOpenGameNegociation(guildid, message, channelid, messageauthorid, gameKeysInThisChannel, parsedMessage.timeout, parsedMessage.isWhite)
                 .catch(function (err) { console.log(err); });
 
         } else if (existingGame[0].targetid === parsedMessage.messageauthorid) {
 
             console.log('/* they are the target of an open invite, accept the invite */');
 
-            acceptGameNegociation(channelid, messageauthorid, gameKeysInThisChannel)
+            acceptGameNegociation(guildid, channelid, messageauthorid, gameKeysInThisChannel)
                 .catch(console.log);
 
         }
     } else if (existingGame[0].state === NS_ACCEPTED) {
         console.log(' /* game in flow, take \'play\' to mean move a piece */');
         parsedMessage.verb = 'move';
-        processVerb(message, channelid, messageauthorid, gameKeysInThisChannel, parsedMessage);
+        processVerb(guildid, message, channelid, messageauthorid, gameKeysInThisChannel, parsedMessage);
     }
 }
 
@@ -558,11 +573,11 @@ function getCleanMoveData(restOfMessage) {
     return returnObj;
 }
 
-function movePieceBoyakasha(channelid, userid, existingGame, cleanedMove, message) {
+function movePieceBoyakasha(guildid, channelid, userid, existingGame, cleanedMove, message) {
     const move = cleanedMove.move;
     const restOfMessage = cleanedMove.restOfMessage.join(' ');
 
-    const chessjs = repo.dbGetForUserKey(existingGame.authorid, channelid)[0].chessjs;    
+    const chessjs = repo.dbGetForUserKey(guildid, existingGame.authorid, channelid)[0].chessjs;    
 
     const isWhiteNext = chessjs.turn() === 'w';
     const whonextid = existingGame.isWhite
@@ -570,7 +585,7 @@ function movePieceBoyakasha(channelid, userid, existingGame, cleanedMove, messag
         : isWhiteNext ? existingGame.targetid : existingGame.authorid;
 
     if (whonextid !== userid) {
-        return tellUser(channelid, userid, ', sorry it\'s not your move yet.', anger, message);
+        return tellUser(guildid, channelid, userid, ', sorry it\'s not your move yet.', anger, message);
     }
     const moved = chessjs.move(move, { sloppy: true, legal: true });
 
@@ -590,26 +605,26 @@ function movePieceBoyakasha(channelid, userid, existingGame, cleanedMove, messag
                 : restOfMessage;
         }
 
-        return tellUser(channelid, userid, ', sorry unable to move ' + move + extraInfo, anger, message)
-            .then(t => showBoard(channelid, repo.dbGetForUserKey(existingGame.authorid, channelid)[0]));
+        return tellUser(guildid, channelid, userid, ', sorry unable to move ' + move + extraInfo, anger, message)
+            .then(t => showBoard(guildid, channelid, repo.dbGetForUserKey(guildid, existingGame.authorid, channelid)[0]));
     };
-    repo.dbUpdateForUser(existingGame.authorid, channelid, { chessjs });
-    return showBoard(channelid, repo.dbGetForUserKey(existingGame.authorid, channelid)[0]);
+    repo.dbUpdateForUser(guildid, existingGame.authorid, channelid, { chessjs });
+    return showBoard(guildid, channelid, repo.dbGetForUserKey(guildid, existingGame.authorid, channelid)[0]);
 }
 
-function processVerb(message, channelid, messageauthorid, gameKeysInThisChannel, parsedMessage) {
-    const existingGame = repo.dbGetGame(gameKeysInThisChannel);
+function processVerb(guildid, message, channelid, messageauthorid, gameKeysInThisChannel, parsedMessage) {
+    const existingGame = repo.dbGetGame(guildid, gameKeysInThisChannel);
     const isExistingGame = existingGame.length > 0;
 
     switch (parsedMessage.verb) {
         case 'play':
-            processVerbPlay(message, channelid, messageauthorid, gameKeysInThisChannel, parsedMessage, existingGame, isExistingGame);
+            processVerbPlay(guildid, message, channelid, messageauthorid, gameKeysInThisChannel, parsedMessage, existingGame, isExistingGame);
             break;
 
         case 'cancel':
             console.log('cancel', existingGame, messageauthorid);
             if (existingGame.length > 0) {
-                cancelGame(channelid, messageauthorid, { optionalGameKeysInThisChannel: gameKeysInThisChannel, optionalMessage: message })
+                cancelGame(guildid, channelid, messageauthorid, { optionalGameKeysInThisChannel: gameKeysInThisChannel, optionalMessage: message })
                     .catch(console.log);
             }
             break;
@@ -618,7 +633,7 @@ function processVerb(message, channelid, messageauthorid, gameKeysInThisChannel,
             switch (parsedMessage.listThing) {
                 case 'game':
                 case 'games':
-                    tellThemTheListOfGames(channelid, messageauthorid, message)
+                    tellThemTheListOfGames(guildid, channelid, messageauthorid, message)
                         .catch(console.log);
 
                     break;
@@ -627,14 +642,14 @@ function processVerb(message, channelid, messageauthorid, gameKeysInThisChannel,
 
         case 'info':
             if (isExistingGame) {
-                chessyInfo(channelid, messageauthorid, gameKeysInThisChannel, parsedMessage.infoThing, existingGame[0].chessjs, message.channel)
+                chessyInfo(guildid, channelid, messageauthorid, gameKeysInThisChannel, parsedMessage.infoThing, existingGame[0].chessjs, message.channel)
                     .catch(console.log);
             }
             break;
 
         case 'board':
             if (isExistingGame) {
-                showBoard(channelid, existingGame[0])
+                showBoard(guildid, channelid, existingGame[0])
                     .catch(console.log);
             }
             break;
@@ -644,7 +659,7 @@ function processVerb(message, channelid, messageauthorid, gameKeysInThisChannel,
                 if (existingGame[0].state === NS_ACCEPTED) {
                     const cleanMoveData = getCleanMoveData(parsedMessage.restOfMessage);
                     if (cleanMoveData.error) {
-                        tellUser(channelid, messageauthorid, '"' + existingGame[0].restOfMessage + '" move not recognised', anger, message.channel)
+                        tellUser(guildid, channelid, messageauthorid, '"' + existingGame[0].restOfMessage + '" move not recognised', anger, message.channel)
                             .catch(console.log);
                         return;
                     }
