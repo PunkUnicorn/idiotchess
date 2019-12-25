@@ -97,7 +97,12 @@ function destroyInviteTimer(channelid, messageauthorid, removefromdb, alsoupdate
     console.log('repo.dbGetGameKeysForUser(messageauthorid, channelid)', repo.dbGetGameKeysForUser(messageauthorid, channelid));
 }
 
-function cancelGame(channelid, messageauthorid, optionalGameKeysInThisChannel, optionalMessage) {
+function cancelGame(channelid, messageauthorid, options) {
+    options = typeof options === 'undefined' ? {} : options;
+
+    const optionalGameKeysInThisChannel = options.optionalGameKeysInThisChannel;
+    const optionalMessage = options.optionalMessage;
+
     const game = typeof optionalGameKeysInThisChannel === 'undefined'
         ? repo.dbGetGame(repo.dbGetGameKeysForUser(messageauthorid, channelid))
         : repo.dbGetGame(optionalGameKeysInThisChannel);
@@ -164,7 +169,7 @@ function openGameNegociation(message, channelid, messageauthorid, targetid, invi
                                     // Interval timeout
                                     const timer = setInterval(
                                         function (channelid, messageauthorid, targetid) {
-                                            cancelGame(channelid, messageauthorid, NOT_DEFINED_FGD53C8, message)
+                                            cancelGame(channelid, messageauthorid, { optionalMessage: message })
                                                 .then(t => timeoutOpenedNegociations(message, channelid, messageauthorid, targetid))
                                                 .catch(console.log);
 
@@ -188,47 +193,45 @@ function openGameNegociation(message, channelid, messageauthorid, targetid, invi
         });
 }
 
-function tellThemTheListOfGames(channelid, userid) {
-    const allTheirGames = repo.dbGetGame(repo.dbGetGameKeysForUser(userid, channelid));
+function tellThemTheListOfGames(channelid, userid, message) {
+    const allTheirGames = repo.dbGetGame(repo.dbGetGameKeysForUser(userid /*, wayt - leve this out to get all channels --> channelid*/));
 
     if (allTheirGames.length === 0) {
-        return tellUser(channelid, userid, '*You have no games*');
+        return tellUser(channelid, userid, ' *You have no games*', information, message);
     }
-    console.log('allTheirGames ');
+    //console.log('allTheirGames ', allTheirGames);
 
-    const displayTheirGamesInProgress =
-        (typeof allTheirGames !== 'undefined')
-            ? allTheirGames
-                .filter(f => f.isAuthor)
-                .map(function (val) {
+    const displayTheirGamesInProgress
+        = allTheirGames
+            .filter(f => f.isAuthor)
+            .map(function (val) {
 
-                    const channel = bot.channels
-                        .find(f => f.id == val.channelid)
-                        .name;
+                const channel = bot.channels
+                    .find(f => f.id == val.channelid)
+                    .name;
 
-                    const author = bot.users
-                        .find(f => f.id == val.authorid)
-                        .username;
+                const author = bot.users
+                    .find(f => f.id == val.authorid)
+                    .username;
 
-                    const target = bot.users
-                        .find(f => f.id == val.targetid);
+                const target = bot.users
+                    .find(f => f.id == val.targetid);
 
-                    const targetUsername = typeof target !== 'undefined'
-                        ? target.username
-                        : ' ' + question_mark + ' ';
+                const targetUsername = typeof target !== 'undefined'
+                    ? target.username
+                    : ' ' + question_mark + ' ';
 
-                    const state = (val.state === NS_INVITED)
-                        ? '*Invited*'
-                        : '*Playing*';
+                const state = (val.state === NS_INVITED)
+                    ? '*Invited*'
+                    : '*Playing*';
 
-                    console.log('val.dateStarted', val.dateStarted);
-                    return author + ' vs ' + targetUsername + ' in ' + channel + ', ' + state + ', ...';// + ((moveObjs.channelID === val.data.channelID) ? ' <-- *You are here*' : '');
-                })
-            : [];
+                //console.log('val.dateStarted', val.dateStarted);
+                return author + ' vs ' + targetUsername + ' in ' + channel + ', ' + state + ', ...';// + ((moveObjs.channelID === val.data.channelID) ? ' <-- *You are here*' : '');
+            });
     
-    const msg = '*List:*  ' + displayTheirGamesInProgress.join(", ");
+    const msg = '*List:*  \n\t' + displayTheirGamesInProgress.join("\n\t");
     return bot.channels.find('id', channelid)
-        .send(msg + ' also: ' + JSON.stringify(repo.dbGetAll()[0]))
+        .send(msg + '\n\n ...also: ' + JSON.stringify(repo.dbGetAll()[0]))
         .then(function (result) {
             result.react(information).catch(function (error) { debugDump(bot, moveObjs.channelID, error); });
         });
@@ -240,10 +243,14 @@ function tellUser(channelid, tellthisuserid, speak, optionalemoji, optionalmessa
         ? bot.channels.find('id', channelid)
         : optionalmessage.channel;
 
-    return channel.send('<@!' + tellthisuserid + '>' + speak)
+    const emojiAddition = typeof optionalemoji !== 'undefined'
+        ? ' ' + optionalemoji + ' '
+        : '';
+
+    return channel.send(emojiAddition + '<@!' + tellthisuserid + '>' + speak + emojiAddition)
         .then(function (messageresult) {
-            if (typeof optionalemoji !== 'undefined') {
-                messageresult.react(optionalemoji);
+            if (typeof optionalemoji !== 'undefined' && typeof optionalmessage !== 'undefined') {
+                optionalmessage.react(optionalemoji);
             }
         })
 }
@@ -295,12 +302,19 @@ function showBoard(channelid, existingGame) {
         //.catch(console.log);
 }
 
-function chessyInfo(bot, gameData, channelID, userID, infoThing, fen) {
+function chessyInfo(channelid, messageauthorid, gameKeysInThisChannel, infoThing, chessjs, channel) {
+    const fen = chessjs.fen();
     const infoString = JSON.stringify(chessy.getInfo(fen, [infoThing]), null, '\t');
 
-    bot.channels.find('id', channelID)
-        .send('*Info for* **' + infoThing + '**:  ' + '```' + infoString + '```')
-        .catch (console.log);
+    //const firstInfoThing = infoThing.length > 0
+    //    ? infoThing[1]
+    //    : '';
+
+    const moves = infoThing.match(VALID_SQUARE_REGEX)
+        ? '\nPossible moves for ' + infoThing + ': ' + chessjs.moves({ square: infoThing })
+        : '';
+
+    return channel.send('Info for **' + infoThing + '**:  ' + '```' + infoString + '\n' + moves + '```')
 }
 
 function reactGameInvite(channel, userid, authorid, isAcceptance, isWhite) {
@@ -480,8 +494,9 @@ function processVerbPlay(message, channelid, messageauthorid, gameKeysInThisChan
             tellUser(
                 channelid,
                 messageauthorid,
-                ' I can\'t see who you want to play with' + '\n> @' + bot.user.username + ' play @their name',
-                information,
+                //' I can\'t see who you want to play with' + '\n> @' + bot.user.username + ' play @their name',
+                '',
+                question_mark,
                 message)
                 .catch(console.log);
 
@@ -500,7 +515,7 @@ function processVerbPlay(message, channelid, messageauthorid, gameKeysInThisChan
 
             console.log('/* they have a game invite open *from* someone else, cancel that and make a new invite */');
 
-            cancelGame(channelid, messageauthorid, gameKeysInThisChannel, message)
+            cancelGame(channelid, messageauthorid, { optionalGameKeysInThisChannel: gameKeysInThisChannel, optionalMessage: message })
                 .then(function (result) {
                     openGameNegociation(message, channelid, messageauthorid, parsedMessage.targetid, parsedMessage.timeout, parsedMessage.isWhite)
                         .catch(console.log);
@@ -519,7 +534,7 @@ function processVerbPlay(message, channelid, messageauthorid, gameKeysInThisChan
             console.log('/* they are the target of an open invite, accept the invite */');
 
             acceptGameNegociation(channelid, messageauthorid, gameKeysInThisChannel)
-                .catch(function (err) { console.log(err); });
+                .catch(console.log);
 
         }
     } else if (existingGame[0].state === NS_ACCEPTED) {
@@ -529,43 +544,53 @@ function processVerbPlay(message, channelid, messageauthorid, gameKeysInThisChan
     }
 }
 
+const VALID_SQUARE_REGEX = /([A-Ha-h][1-8]|[1-8][A-Ha-h])/g; ///([a-h][1-8]|[1-8][a-h])/g;
+
 function getCleanMoveData(restOfMessage) {
     const returnObj = {};
     returnObj.error = false;
+    returnObj.restOfMessage = restOfMessage;
     returnObj.move = restOfMessage
         .filter(f => f.length >= 2)
-        .filter(f => f.substring(0, 2).match(/([A-Ha-h][1-8]|[1-8][A-Ha-h])/g))
+        .filter(f => f.substring(0, 2).match(VALID_SQUARE_REGEX))
         .join('');
 
     return returnObj;
 }
 
-function movePieceBoyakasha(channelid, userid, existingGame, move) {
+function movePieceBoyakasha(channelid, userid, existingGame, cleanedMove, message) {
+    const move = cleanedMove.move;
+    const restOfMessage = cleanedMove.restOfMessage.join(' ');
+
     const chessjs = repo.dbGetForUserKey(existingGame.authorid, channelid)[0].chessjs;    
+
     const isWhiteNext = chessjs.turn() === 'w';
     const whonextid = existingGame.isWhite
         ? isWhiteNext ? existingGame.authorid : existingGame.targetid
         : isWhiteNext ? existingGame.targetid : existingGame.authorid;
 
     if (whonextid !== userid) {
-        return tellUser(channelid, userid, ', sorry it\'s not your move yet.', anger);
+        return tellUser(channelid, userid, ', sorry it\'s not your move yet.', anger, message);
     }
     const moved = chessjs.move(move, { sloppy: true, legal: true });
 
     if (moved === null) {
-        const matches = /([a-h][1-8]|[1-8][a-h])/g.exec(move);
-        const firstPiece = matches !== null && matches.length > 0 ? matches[0] : null;
+        const matches = VALID_SQUARE_REGEX.exec(move);
+
+        console.log('matches', matches);
+
+        const firstPiece = matches !== null && matches.length > 0 ? matches[0] : restOfMessage ;
 
         var extraInfo = '';
-        if (firstPiece !== null && move.trim().length > 0) {
+        if (firstPiece.trim().length > 0) {
             console.log('chessjs', chessjs, 'firstPiece', firstPiece);
             const possibleMoves = chessjs.moves({square: firstPiece });
             extraInfo = possibleMoves.length > 0
-                ? '\n' + '>Valid moves for ' + firstPiece + ':' + possibleMoves
-                : '';
+                ? '\n' + 'Valid moves for ' + firstPiece + ': ' + firstPiece + '-*' + possibleMoves.join('*, ' + firstPiece + '-*') + '*'
+                : restOfMessage;
         }
 
-        return tellUser(channelid, userid, ', unable to move' + '\n' + chessjs.moves() + extraInfo, anger)
+        return tellUser(channelid, userid, ', sorry unable to move ' + move + extraInfo, anger, message)
             .then(t => showBoard(channelid, repo.dbGetForUserKey(existingGame.authorid, channelid)[0]));
     };
     repo.dbUpdateForUser(existingGame.authorid, channelid, { chessjs });
@@ -584,16 +609,8 @@ function processVerb(message, channelid, messageauthorid, gameKeysInThisChannel,
         case 'cancel':
             console.log('cancel', existingGame, messageauthorid);
             if (existingGame.length > 0) {
-                switch (existingGame.state) {
-                    //case NS_INVITED:
-                        //endOpenedNegociations(bot, gameData, existingGame);
-                        //break;
-
-                    default:
-                        cancelGame(channelid, messageauthorid, gameKeysInThisChannel)
-                            .catch(function (err) { console.log(err); });
-                        break;
-                }
+                cancelGame(channelid, messageauthorid, { optionalGameKeysInThisChannel: gameKeysInThisChannel, optionalMessage: message })
+                    .catch(console.log);
             }
             break;
 
@@ -601,7 +618,7 @@ function processVerb(message, channelid, messageauthorid, gameKeysInThisChannel,
             switch (parsedMessage.listThing) {
                 case 'game':
                 case 'games':
-                    tellThemTheListOfGames(channelid, messageauthorid)
+                    tellThemTheListOfGames(channelid, messageauthorid, message)
                         .catch(console.log);
 
                     break;
@@ -610,7 +627,8 @@ function processVerb(message, channelid, messageauthorid, gameKeysInThisChannel,
 
         case 'info':
             if (isExistingGame) {
-                chessyInfo(bot, gameData, moveObjs.channelID, moveObjs.userID, moveObjs.infoThing, existingGame.chessjs.fen());
+                chessyInfo(channelid, messageauthorid, gameKeysInThisChannel, parsedMessage.infoThing, existingGame[0].chessjs, message.channel)
+                    .catch(console.log);
             }
             break;
 
@@ -626,11 +644,11 @@ function processVerb(message, channelid, messageauthorid, gameKeysInThisChannel,
                 if (existingGame[0].state === NS_ACCEPTED) {
                     const cleanMoveData = getCleanMoveData(parsedMessage.restOfMessage);
                     if (cleanMoveData.error) {
-                        tellUser(channelid, messageauthorid, '"' + existingGame[0].restOfMessage + '" move not recognised', anger)
+                        tellUser(channelid, messageauthorid, '"' + existingGame[0].restOfMessage + '" move not recognised', anger, message.channel)
                             .catch(console.log);
                         return;
                     }
-                    movePieceBoyakasha(channelid, messageauthorid, existingGame[0], cleanMoveData.move)
+                    movePieceBoyakasha(channelid, messageauthorid, existingGame[0], cleanMoveData, message)
                         .catch(console.log);
                 }
             }

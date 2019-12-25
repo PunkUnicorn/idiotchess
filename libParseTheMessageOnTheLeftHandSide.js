@@ -33,7 +33,7 @@ function parseMessage(bot, messageuserid, channelid, content, allNonBotMentions,
     var prevTokens = [];
     var prevToken = null;
     decodeMe.forEach(token => {
-        const cleantoken = token
+        var cleantoken = token
             .toLowerCase()
             .replace(/\!/g, '')
             .replace(/\?/g, '')
@@ -43,73 +43,86 @@ function parseMessage(bot, messageuserid, channelid, content, allNonBotMentions,
             return;
 
 
-        console.log('cleant', cleantoken);
+        console.log('cleantoken', cleantoken);
 
+        const VERB_RETRY_SAFTY = 3; //don't exceed this number of retrys
+        var retryCount = 0;
+        do  {
+            var retry = false;
 
-        if (isInfoMode) {
-            infoThing = cleantoken;
-            isInfoMode = false;
-            verb = 'info';
-        } else if (isListMode) {
-            listThing = cleantoken;
-            //verb = 'list';
-            isListMode = false;
-        } else if (isTimeout) {
-            timeout = parseInt(cleantoken, 10);
-            isTimeout = false;
-        } else if (isTakeBack) {
-            restOfMessage.push(cleantoken);
-        } else {
-            switch (cleantoken) {
-                case 'info':
-                    isInfoMode = true;
-                    verb = cleantoken;
-                    break;
+            if (isInfoMode) {
+                infoThing = cleantoken;
+                isInfoMode = false;
+                verb = 'info';
+            } else if (isListMode) {
+                listThing = cleantoken;
+                //verb = 'list';
+                isListMode = false;
+            } else if (isTimeout) {
+                timeout = parseInt(cleantoken, 10);
+                isTimeout = false;
+            } else if (isTakeBack) {
+                restOfMessage.push(cleantoken);
+            } else {
+                switch (cleantoken) {
+                    case 'i': cleantoken = 'info'; retry = true; break;
+                    case 'l': cleantoken = 'list'; retry = true; break;
+                    case 't': cleantoken = 'timeout'; retry = true; break;
+                    case 'b': cleantoken = 'board'; retry = true; break;
+                    case 'm': cleantoken = 'move'; retry = true; break;
 
-                case 'list':
-                    isListMode = true;
-                    verb = cleantoken;
-                    break;
+                    case 'information':
+                    case 'show':
+                    case 'info':
+                        isInfoMode = true;
+                        verb = cleantoken;
+                        break;
 
-                case 'timeout':
-                    isTimeout = true;
-                    break;
+                    case 'list':
+                        isListMode = true;
+                        verb = cleantoken;
+                        break;
 
-                case 'board':
-                case 'move':
-                case 'resign':
-                case 'draw':
-                case 'change':
-                case 'take':
-                    verb = cleantoken;
-                    break;
+                    case 'timeout':
+                        isTimeout = true;
+                        break;
 
-                case 'undo':
-                    verb = cleantoken;
-                    isTakeBack = true;
-                    break;
+                    case 'board':
+                    case 'move':
+                    case 'resign':
+                    case 'draw':
+                    case 'change':
+                    case 'take':
+                        verb = cleantoken;
+                        break;
 
-                case 'back':
-                    if (/* 'take back' */prevToken === 'take' || (/* or 'take [move|it] back' */prevTokens.length > 2 && prevTokens[1] !== 'take')) {
+                    case 'undo':
+                        verb = cleantoken;
                         isTakeBack = true;
-                        verb = 'undo';
-                    }
-                    break;
+                        break;
 
-                case 'play':
-                    verb = cleantoken;
-                    break;
+                    case 'back':
+                        if (/* 'take back' */prevToken === 'take' || (/* or 'take [move|it] back' */prevTokens.length > 2 && prevTokens[1] !== 'take')) {
+                            isTakeBack = true;
+                            verb = 'undo';
+                        }
+                        break;
 
-                case 'quit':
-                case 'cancel':
-                    verb = 'cancel';
-                    break;
+                    case 'play':
+                        verb = cleantoken;
+                        break;
 
-                default:
-                    restOfMessage.push(cleantoken);
-                    break;
-            }
-        }
+                    case 'quit':
+                    case 'cancel':
+                        verb = 'cancel';
+                        break;
+
+                    default:
+                        restOfMessage.push(cleantoken);
+                        break;
+                }
+            } 
+        } while (++retryCount < VERB_RETRY_SAFTY && retry);
 
         if (verb.length === 0) {
             // if game already in play the default verb is 'move'

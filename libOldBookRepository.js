@@ -56,13 +56,28 @@ function dbUpdateForGame(userid, channelid, game) {
 
 /* gets all game rows where the user is an author or target */
 function dbGetGameKeysForUser(userid, channelid) {
-    const findKey = { key: dbMakeKey(userid, channelid) };
+    const findKey = typeof channelid !== 'undefined'
+        ? { key: dbMakeKey(userid, channelid) }
+        : [{ authorid: userid }, {targetid: userid} ];
 
     const keys = games(findKey)
         .select('authorkey', 'targetkey', 'key');
 
+    console.log('findKey', findKey, 'and keys', keys);
+
     if (keys.length > 0) {
-        const definedKeys = keys[0].filter(f => typeof f !== 'undefined');
+        var definedKeys = [];
+        for (var i = 0; keys.length > i; i++) {
+            console.log('findKey2', i, keys[i]);
+
+            keys[i]
+                .filter(f => typeof f !== 'undefined')
+                .forEach(function (val) {
+                    definedKeys.push(val); console.log('definedKeys.push(val)', val);
+                });
+        }
+
+        console.log([...new Set(definedKeys)]);
         return [ ...new Set(definedKeys) ];
     }
     return [];
@@ -86,6 +101,7 @@ function dbRemoveGame(userid, channelid) {
 
 function dbGetGame(keys) {
     const result = games({ key: keys }).get();
+    console.log('dbGetGame', result, keys);
     return typeof result === 'undefined'
         ? [[{}]]
         : result;
