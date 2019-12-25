@@ -97,20 +97,46 @@ function destroyInviteTimer(channelid, messageauthorid, removefromdb, alsoupdate
     console.log('repo.dbGetGameKeysForUser(messageauthorid, channelid)', repo.dbGetGameKeysForUser(messageauthorid, channelid));
 }
 
-function cancelGame(channelid, messageauthorid, optionalGameKeysInThisChannel) {
+function cancelGame(channelid, messageauthorid, optionalGameKeysInThisChannel, optionalMessage) {
     const game = typeof optionalGameKeysInThisChannel === 'undefined'
         ? repo.dbGetGame(repo.dbGetGameKeysForUser(messageauthorid, channelid))
         : repo.dbGetGame(optionalGameKeysInThisChannel);
 
-    destroyInviteTimer(channelid, messageauthorid);
-    repo.dbRemoveGame(messageauthorid, channelid);
+    if (game.length > 0) {
+        destroyInviteTimer(channelid, messageauthorid);
+        repo.dbRemoveGame(messageauthorid, channelid);
 
-    return tellUser(
-        channelid,
-        messageauthorid,
-        ', <@!' + messageauthorid + '> has not accepted your invitation.',
-        broken_heart);
+        const authorsGame = game.filter(f => f.isAuthor);
+        if (authorsGame.length === 0) {
+            return tellUser(channelid, messageauthorid, question_mark + ' *error* : no games, wut ' + question_mark, question_mark, optionalMessage);
+        }
 
+        console.log('cancelGame', game, authorsGame[0], '<-- cancelGame');
+        const msg = (authorsGame[0].state === NS_INVITED)
+            ? (messageauthorid === authorsGame[0].targetid
+                ? ', <@!' + authorsGame[0].targetid + '> has not accepted your invitation.' //invite cancelled by target
+                : ' game invite to <@!' + authorsGame[0].targetid + '> cancelled.') //invite cancelled by author
+
+            : ' has cancelled the game between ' +  // game in flow cancelled by somebody
+                '<@!' + authorsGame[0].authorid + '> and <@!' + authorsGame[0].targetid +
+                '>';
+
+        return tellUser(
+            channelid,
+            messageauthorid,
+            msg,
+            broken_heart,
+            optionalMessage);
+    } else {
+        if (typeof optionalMessage !== undefined) {
+            return optionalMessage.react(question_mark);
+        } else {
+            return tellUser(
+                channelid,
+                messageauthorid,
+                question_mark);
+        }
+    }
 }
 
 function timeoutOpenedNegociations(message, channelid, messageauthorid, targetid) {
@@ -138,19 +164,20 @@ function openGameNegociation(message, channelid, messageauthorid, targetid, invi
                                     // Interval timeout
                                     const timer = setInterval(
                                         function (channelid, messageauthorid, targetid) {
-                                            cancelGame(channelid, messageauthorid);
-                                            //destroyInviteTimer(channelid, messageauthorid);
-                                            timeoutOpenedNegociations(message, channelid, messageauthorid, targetid)
+                                            cancelGame(channelid, messageauthorid, NOT_DEFINED_FGD53C8, message)
+                                                .then(t => timeoutOpenedNegociations(message, channelid, messageauthorid, targetid))
                                                 .catch(console.log);
 
                                         }, invitetimeoutmins * 1000 * 60, channelid, messageauthorid, targetid);
 
                                     const challengemessageid = challengeMessage.id;
+                                    const dateStarted = Date.now();
 
                                     const newGameDataObj = {
                                         challengemessageid,
                                         state: NS_INVITED,
-                                        isWhite: iswhite
+                                        isWhite: iswhite,
+                                        gameStarted: dateStarted
                                     };
 
                                     repo.timerAdd(channelid, messageauthorid, timer);
@@ -161,32 +188,47 @@ function openGameNegociation(message, channelid, messageauthorid, targetid, invi
         });
 }
 
-function tellThemTheListOfGames(channelid) {
-    const allTheirGames = repo.dbGetAll();
+function tellThemTheListOfGames(channelid, userid) {
+    const allTheirGames = repo.dbGetGame(repo.dbGetGameKeysForUser(userid, channelid));
 
-    const displayTheirGamesInProgress = (typeof allTheirGames !== 'undefined')
-        ? allTheirGames
-            .map(function (val) {
+    if (allTheirGames.length === 0) {
+        return tellUser(channelid, userid, '*You have no games*');
+    }
+    console.log('allTheirGames ');
 
-                const channel = bot.channels
-                    .find(f => f.id == val.channelid)
-                    .name;
+    const displayTheirGamesInProgress =
+        (typeof allTheirGames !== 'undefined')
+            ? allTheirGames
+                .filter(f => f.isAuthor)
+                .map(function (val) {
 
-                const author = bot.users
-                    .find(f => f.id == val.authorid)
-                    .username;
+                    const channel = bot.channels
+                        .find(f => f.id == val.channelid)
+                        .name;
 
-                const target = bot.users
-                    .find(f => f.id == val.targetid)
-                    .username;
+                    const author = bot.users
+                        .find(f => f.id == val.authorid)
+                        .username;
 
-                return author + ' vs ' + target + ' in ' + channel;// + ((moveObjs.channelID === val.data.channelID) ? ' <-- *You are here*' : '');
-            })
-        : [];
+                    const target = bot.users
+                        .find(f => f.id == val.targetid);
+
+                    const targetUsername = typeof target !== 'undefined'
+                        ? target.username
+                        : ' ' + question_mark + ' ';
+
+                    const state = (val.state === NS_INVITED)
+                        ? '*Invited*'
+                        : '*Playing*';
+
+                    console.log('val.dateStarted', val.dateStarted);
+                    return author + ' vs ' + targetUsername + ' in ' + channel + ', ' + state + ', ...';// + ((moveObjs.channelID === val.data.channelID) ? ' <-- *You are here*' : '');
+                })
+            : [];
     
     const msg = '*List:*  ' + displayTheirGamesInProgress.join(", ");
     return bot.channels.find('id', channelid)
-        .send(msg)
+        .send(msg + ' also: ' + JSON.stringify(repo.dbGetAll()[0]))
         .then(function (result) {
             result.react(information).catch(function (error) { debugDump(bot, moveObjs.channelID, error); });
         });
@@ -350,79 +392,83 @@ logger.add(new logger.transports.Console, {
 logger.level = 'debug';
 
 var bot = null;
-var botInterval = setInterval(function () {
-    clearInterval(botInterval);
+function startBot() {
+    var botInterval = setInterval(function () {
+        clearInterval(botInterval);
 
-    try {
+        try {
 
-        // Initialize Discord Bot
-        bot = new Discord.Client();
-        bot.login(auth.token);
+            // Initialize Discord Bot
+            bot = new Discord.Client();
+            bot.login(auth.token);
 
 
-        bot.on('ready', function () {
-            logger.info('Connected');
-            logger.info('Logged in as: ');
-            logger.info(bot.username + ' - (' + bot.id + ')');
-        });
+            bot.on('ready', function () {
+                logger.info('Connected');
+                logger.info('Logged in as: ');
+                logger.info(bot.username + ' - (' + bot.id + ')');
+            });
 
-        bot.on('messageReactionAdd', function (reaction, user) {
-            if (user.id === bot.user.id) {
-                return;
-            }
+            bot.on('messageReactionAdd', function (reaction, user) {
+                if (user.id === bot.user.id) {
+                    return;
+                }
 
-            const isAcceptance = reaction.emoji.name == EMOJI_ACCEPT_GAME;
-            const isRejection = reaction.emoji.name == EMOJI_REJECT_GAME;
+                const isAcceptance = reaction.emoji.name == EMOJI_ACCEPT_GAME;
+                const isRejection = reaction.emoji.name == EMOJI_REJECT_GAME;
 
-            if (!isAcceptance && !isRejection) {
-                return;
-            }
+                if (!isAcceptance && !isRejection) {
+                    return;
+                }
 
-            const userid = user.id;
-            const channelid = reaction.message.channel.id;
+                const userid = user.id;
+                const channelid = reaction.message.channel.id;
 
-            const authorGame = repo.dbGetGameFromTarget(userid, channelid);
-            if (authorGame.length === 0) {
-                return;
-            }
+                const authorGame = repo.dbGetGameFromTarget(userid, channelid);
+                if (authorGame.length === 0) {
+                    return;
+                }
 
-            reactGameInvite(reaction.message.channel, userid, authorGame[0].authorid, isAcceptance, !authorGame[0].isWhite)
-                .catch(console.log);
-        });
+                reactGameInvite(reaction.message.channel, userid, authorGame[0].authorid, isAcceptance, !authorGame[0].isWhite)
+                    .catch(console.log);
+            });
 
-        bot.on('message', function (message) {
-            if (message.author.id === bot.user.id)
-                return;
+            bot.on('message', function (message) {
+                if (message.author.id === bot.user.id)
+                    return;
 
-            const botMentions = message.mentions.users.filter(m => m.id === bot.user.id).array();
+                const botMentions = message.mentions.users.filter(m => m.id === bot.user.id).array();
 
-            // if this function is not applicable then get out of here ASAP, and don't clog up the indenting on your way out
-            if (typeof botMentions === 'undefined' || botMentions === null || botMentions.length === 0) {
-                return;
-            }
+                // if this function is not applicable then get out of here ASAP, and don't clog up the indenting on your way out
+                if (typeof botMentions === 'undefined' || botMentions === null || botMentions.length === 0) {
+                    return;
+                }
 
-            const messageauthorid = message.author.id;
-            const channelid = message.channel.id;
-            const content = message.content;
+                const messageauthorid = message.author.id;
+                const channelid = message.channel.id;
+                const content = message.content;
 
-            console.log(messageauthorid, channelid, content, '<-------- on message');
+                console.log(messageauthorid, channelid, content, '<-------- on message');
 
-            const allNonBotMentions
-                = message.mentions.users
-                    .filter(m => m.id !== bot.user.id && m.id !== messageauthorid).array();
+                const allNonBotMentions
+                    = message.mentions.users
+                        .filter(m => m.id !== bot.user.id && m.id !== messageauthorid).array();
 
-            const gameKeysInThisChannel = repo.dbGetGameKeysForUser(messageauthorid, channelid);
+                const gameKeysInThisChannel = repo.dbGetGameKeysForUser(messageauthorid, channelid);
 
-            const parsedMessage = parser.parseMessage(bot, messageauthorid, channelid, content, allNonBotMentions, gameKeysInThisChannel);
+                const parsedMessage = parser.parseMessage(bot, messageauthorid, channelid, content, allNonBotMentions, gameKeysInThisChannel);
 
-            processVerb(message, channelid, messageauthorid, gameKeysInThisChannel, parsedMessage);
+                processVerb(message, channelid, messageauthorid, gameKeysInThisChannel, parsedMessage);
 
-        });
-    } catch (err) {
-        console.log('err:', err);
-    }
+            });
+        } catch (err) {
+            console.log('err:', err);
+        }
 
-}, 1000);// * 15);
+    }, 1000);// * 15);
+}
+startBot();
+
 
 function processVerbPlay(message, channelid, messageauthorid, gameKeysInThisChannel, parsedMessage, existingGame, isExistingGame) {
     if (!isExistingGame) {
@@ -454,7 +500,7 @@ function processVerbPlay(message, channelid, messageauthorid, gameKeysInThisChan
 
             console.log('/* they have a game invite open *from* someone else, cancel that and make a new invite */');
 
-            cancelGame(channelid, messageauthorid, gameKeysInThisChannel)
+            cancelGame(channelid, messageauthorid, gameKeysInThisChannel, message)
                 .then(function (result) {
                     openGameNegociation(message, channelid, messageauthorid, parsedMessage.targetid, parsedMessage.timeout, parsedMessage.isWhite)
                         .catch(console.log);
@@ -511,15 +557,16 @@ function movePieceBoyakasha(channelid, userid, existingGame, move) {
         const firstPiece = matches !== null && matches.length > 0 ? matches[0] : null;
 
         var extraInfo = '';
-        if (firstPiece !== null) {
-            const possibleMoves = chessjs.moves(move, { square: firstPiece });
+        if (firstPiece !== null && move.trim().length > 0) {
+            console.log('chessjs', chessjs, 'firstPiece', firstPiece);
+            const possibleMoves = chessjs.moves({square: firstPiece });
             extraInfo = possibleMoves.length > 0
                 ? '\n' + '>Valid moves for ' + firstPiece + ':' + possibleMoves
                 : '';
         }
 
         return tellUser(channelid, userid, ', unable to move' + '\n' + chessjs.moves() + extraInfo, anger)
-            .then(t => showBoard(channelid, exisitingGame));
+            .then(t => showBoard(channelid, repo.dbGetForUserKey(existingGame.authorid, channelid)[0]));
     };
     repo.dbUpdateForUser(existingGame.authorid, channelid, { chessjs });
     return showBoard(channelid, repo.dbGetForUserKey(existingGame.authorid, channelid)[0]);
@@ -535,7 +582,7 @@ function processVerb(message, channelid, messageauthorid, gameKeysInThisChannel,
             break;
 
         case 'cancel':
-            console.log('cancel', existingGame, userID);
+            console.log('cancel', existingGame, messageauthorid);
             if (existingGame.length > 0) {
                 switch (existingGame.state) {
                     //case NS_INVITED:
@@ -543,7 +590,8 @@ function processVerb(message, channelid, messageauthorid, gameKeysInThisChannel,
                         //break;
 
                     default:
-                        closeGame(bot, gameData, userID, existingGame);
+                        cancelGame(channelid, messageauthorid, gameKeysInThisChannel)
+                            .catch(function (err) { console.log(err); });
                         break;
                 }
             }
@@ -553,7 +601,7 @@ function processVerb(message, channelid, messageauthorid, gameKeysInThisChannel,
             switch (parsedMessage.listThing) {
                 case 'game':
                 case 'games':
-                    tellThemTheListOfGames(channelid)
+                    tellThemTheListOfGames(channelid, messageauthorid)
                         .catch(console.log);
 
                     break;
@@ -700,6 +748,10 @@ var htmlServerInterval = setInterval(function () {
 
                         case '/speak':
                             adminSpeak(bot, gameData, response, reqData);
+                            break;
+
+                        case '/restartbot':
+                            startBot();
                             break;
                     }
                 }
