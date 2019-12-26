@@ -1,9 +1,9 @@
 # the setting to make 
 # sudo crontab -e
 #https://www.simplified.guide/linux/automatically-run-program-on-startup#automatically-run-program-on-linux-startup-via-cron
-@reboot cd /home/punkunicorn/idiotchess && cp bot.log bot.previous.log && cp bot.err.log bot.previous.err.log && git pull --force && node bot.js > >(tee bot.log) 2> >(tee bot.err.log >&2)
+#@reboot cd /home/punkunicorn/idiotchess && cp bot.log bot.previous.log && cp bot.err.log bot.previous.err.log && git pull #--force && node bot.js > >(tee bot.log) 2> >(tee bot.err.log >&2)
 
-@reboot cd /home/punkunicorn/idiotchess && cp bot.log bot.previous.log && cp bot.err.log bot.previous.err.log && git pull --force && node bot.js > >(tee bot.log) 2> >(tee bot.err.log >&2)
+@reboot cd /home/punkunicorn/idiotchess && cp bot.log bot.previous.log && cp bot.err.log bot.previous.err.log && git checkout . --force && git checkout master --force && git pull --force && node bot2.js > >(tee bot.log) 2> >(tee bot.err.log  >&2)
 
 
 
