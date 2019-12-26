@@ -458,7 +458,7 @@ function addEmojiArray(guildid, boardMessage, emojiArray, filter) {
             prevWait = newWait;
         });
 
-    return prevWait;
+    return Promise.all(returns);
 }
 
 
@@ -478,8 +478,19 @@ function showBoard(guildid, channel, existingGame, reactionArray) {
         }
     }    
 
+
+    var ascii = '';
+    if (whoNextGame[0].isWhite) {
+        ascii = existingGame.chessjs.ascii();
+    } else {
+        ascii = existingGame.chessjs.ascii().split('').reverse().join('');
+        var asciia = ascii.split("\n");
+        asciia.shift();
+        ascii = '  ' + asciia.join('\n');
+    }
+
     return channel
-        .send('```' + existingGame.chessjs.ascii() + '```' + '\n<@' + whonext.whonextid + '> to play... ' + data)
+        .send('```' + ascii + '```' + '\n<@' + whonext.whonextid + '> to play... ' + data)
         .then(sentMessage => addEmojiArray(guildid, sentMessage, reactionArray));
 }
 
@@ -660,20 +671,24 @@ function startBot() {
                     switch (reactionEmojiName) {
                         case EMOJI_SHOW_LETTERS:
                             const letters = haveSelection 
-                                ? getLettersNumbersForValidMoves(reactorGame.data.join(''))
+                                ? getLettersNumbersForValidMoves(reactorGame.data.join('')[0])
                                 : emoji_navigation_letters;
                     
+                            console.log('planting emoji letters', letters);
+
                             addEmojiArray(guildid, reaction.message, emoji_navigation_letters, (t) => letters.includes(t))
                                 .catch(console.log);
                             isProcessed = true;
                             break;
 
                         case EMOJI_SHOW_NUMBERS:
-                            const numbers
-                                = getLettersNumbersForValidMoves(repo.dbGetForUserKey(guildid, userid, channelid)[0].data.join(), authorGame[0])
-                                [1];
+                            const numbers = haveSelection 
+                                ? getLettersNumbersForValidMoves(reactorGame.data.join('')[1])
+                                : emoji_navigation_numbers;
 
-                            addEmojiArray(guildid, reaction.message, emoji_navigation_numbers, (t) => numbers(t) )
+                            console.log('planting emoji numbers', numbers);
+
+                            addEmojiArray(guildid, reaction.message, emoji_navigation_numbers, (t) => numbers.includes(t) )
                                 .catch(console.log);
                             isProcessed = true;
                             break;
@@ -864,7 +879,9 @@ function movePieceBoyakasha(guildid, channelid, userid, existingGame, cleanedMov
     if (moved === null) {
         const matches = VALID_SQUARE_REGEX.exec(move);
 
-        const firstPiece = matches !== null && matches.length > 0 ? matches[0] : restOfMessage ;
+        const firstPiece = matches !== null && matches.length > 0 ? matches[0] : restOfMessage.join(' ') ;
+
+        console.log('firstPiece', firstPiece);
 
         var extraInfo = '';
         if (firstPiece.trim().length > 0) {
@@ -882,6 +899,8 @@ function movePieceBoyakasha(guildid, channelid, userid, existingGame, cleanedMov
 }
 
 function getLettersNumbersForValidMoves(piece, existingGame) {
+    if (typeof piece === 'undefined') return [ emoji_navigation_letters, emoji_navigation_numbers ];
+
     var testPiece = piece;
     if ( testPiece.length < 2) {
         return [ emoji_navigation_letters, emoji_navigation_numbers ];
@@ -933,6 +952,17 @@ function processVerb(guildid, message, channelid, messageauthorid, gameKeysInThi
     const isExistingGame = existingGame.length > 0;
 
     switch (parsedMessage.verb) {
+        case 'error':
+            tellUser(
+                guildid, 
+                channelid,
+                messageauthorid,
+                ' ' + question_mark,
+                question_mark)
+            .catch(console.log);
+
+            break;
+
         case 'play':
             processVerbPlay(guildid, message, channelid, messageauthorid, gameKeysInThisChannel, parsedMessage, existingGame, isExistingGame);
             break;

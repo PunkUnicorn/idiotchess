@@ -5,6 +5,9 @@ function parseMessage(bot, messageuserid, channelid, content, allNonBotMentions,
         .split(' ')
         .filter(f => f.length > 0);
 
+    const errorStringMessage = content
+        .replace(/\<\@\![0-9]+\>/g, '**blah blah**'); // remove mentions tags;
+
     console.log(decodeMe);
 
     var verb = '';
@@ -29,6 +32,8 @@ function parseMessage(bot, messageuserid, channelid, content, allNonBotMentions,
     var isInfoMode = false;
 
     var isWhite = true;
+
+    var error = null;
 
     var prevTokens = [];
     var prevToken = null;
@@ -132,8 +137,10 @@ function parseMessage(bot, messageuserid, channelid, content, allNonBotMentions,
         } while (++retryCount < VERB_RETRY_SAFTY && retry);
 
         if (verb.length === 0) {
-            // if game already in play the default verb is 'move'
-            verb = (gameKeysInThisChannel.length > 0) ? 'move' : 'play';
+            error = errorStringMessage;
+            verb = 'error';
+            //// if game already in play the default verb is 'move'
+            //verb = (gameKeysInThisChannel.length > 0) ? 'move' : 'play';
         }
 
         // for newgames, see if the player side colour has been specified
@@ -179,7 +186,9 @@ function parseMessage(bot, messageuserid, channelid, content, allNonBotMentions,
         listThing, /* word after the word 'list' */
 
         /* info */
-        infoThing /* word after the word 'info' */
+        infoThing, /* word after the word 'info' */
+        
+        error
     };
 }
 
