@@ -75,15 +75,16 @@ function dbUpdateForGame(guildid, userid, channelid, game) {
     dbGetGuildGame(guildid)([{ key: dbGetGameKeysForUser(guildid, userid, channelid) }] ).update(game);
 }
 
-/* gets all game rows where the user is an author or target */
+/* gets all game keys where the user is an author or target */
 function dbGetGameKeysForUser(guildid, userid, channelid) {
-    const findKey = typeof channelid !== 'undefined'
-        ? { key: dbMakeKey(guildid, userid, channelid) }
-        : [{ authorid: userid }, {targetid: userid} ];
+    const findKey = [{ authorid: userid }, {targetid: userid} ];
+    // const findKey = typeof channelid !== 'undefined'
+    //     ? { key: dbMakeKey(guildid, userid, channelid) }
+    //     : [{ authorid: userid }, {targetid: userid} ];
 
     var db = dbGetGuildGame(guildid);
 
-    console.log('dbGetGameKeysForUser', db(), 'and', findKey);
+    console.log('dbGetGameKeysForUser', findKey);
     const keys = db(findKey)
         .select('authorkey', 'targetkey', 'key');
 

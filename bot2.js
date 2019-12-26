@@ -85,7 +85,7 @@ function destroyInviteTimer(guildid, channelid, messageauthorid, removefromdb, a
     }
 
     const timer = repo.timerGet(guildid, channelid, messageauthorid);
-    console.log('destroyInviteTimer', timer);
+    //console.log('destroyInviteTimer', timer);
     if (timer !== null) {
         clearInterval(timer);
         repo.timerClear(guildid, channelid, messageauthorid);
@@ -355,52 +355,137 @@ const emoji_gear = '⚙️';
 const emoji_castle = '🏰';
 const emoji_pawprints = '🐾';
 const emoji_ribbon = '🎗️';
-const emoji_yarn = '🧶';
-consr emoji_play = '▶️';
+const emoji_play = '▶️';
+const emoji_slider = '🎚';
+const emoji_new = '';
+const emoji_hole = '🕳';
+const emoji_control = '🎛';
+const emoji_clamp = '🗜';
+const emoji_cool = '';
+const emoji_dagger = '🗡';
+const emoji_shield = '🛡';
+const emoji_bow = '🏹';
+const emoji_crossedswords = '⚔';
+const emoji_heavytick = '✅';
+// unknown emoji: const emoji_circleinformation = '🛈';
+const emoji_bigbackslash = '🙽';
+const emoji_bigforwardslash = '🙼';
+const emoji_heavyplay = '';
+const emoji_fire = '';
+const emoji_crossundo = '❎';
 
-const EMOJI_MOVE = emoji_play;
+
+
+
+
+const EMOJI_SHOW_LETTERS = emoji_letters;
+const EMOJI_SHOW_NUMBERS = emoji_numbers
 const EMOJI_INFO = emoji_information;
+const EMOJI_SCROLL_LOLWUT = emoji_scroll;
+const EMOJI_CLEARSELECTION = emoji_crossundo;
+
 const EMOJI_SETTINGS = emoji_gear;
 
 
-const emoji_board_row = [ emoji_1, emoji_2, emoji_3, emoji_4, emoji_5, emoji_6, emoji_7, emoji_8 ];
-const emoji_board_column = [ emoji_a, emoji_b, emoji_c, emoji_d, emoji_e, emoji_f, emoji_g, emoji_h ];
-const emoji_board_toolkit = [ EMOJI_MOVE, EMOJI_INFO, EMOJI_SETTINGS  ];
+const emoji_board_toolkit = [ EMOJI_SHOW_LETTERS, EMOJI_SHOW_NUMBERS /* EMOJI_SCROLL_LOLWUT, emoji_pawprints, empji_rightcurvinguparrow, empji_leftcurvingdownarrow2, EMOJI_SETTINGS*/  ];
+const emoji_board_toolkit_withselection = [ EMOJI_SHOW_LETTERS, EMOJI_SHOW_NUMBERS, EMOJI_INFO, EMOJI_CLEARSELECTION /* EMOJI_SCROLL_LOLWUT, emoji_pawprints, empji_rightcurvinguparrow, empji_leftcurvingdownarrow2, EMOJI_SETTINGS*/  ];
 
-function addMoveHelperEmojis(guildid, boardMessage, existingGame) {
+const emoji_navigation_numbers = [ emoji_1, emoji_2, emoji_3, emoji_4, emoji_5, emoji_6, emoji_7, emoji_8];
+const emoji_navigation_letters = [ emoji_a, emoji_b, emoji_c, emoji_d, emoji_e, emoji_f, emoji_g, emoji_h];
+const letters = ['a','b','c','d','e','f','g','h' ];
+const emoji_settings = [ emoji_wrench, emoji_hammer, emoji_yarn, emoji_tools, emoji_key1, emoji_nutandbolt ];
+
+
+
+/*********************************
+   +------------------------+
+ 8 | r  n  b  q  k  b  n  r |
+ 7 | p  p  p  p  p  p  p  p |
+ 6 | .  .  .  .  .  .  .  . |
+ 5 | .  .  .  .  .  .  .  . |
+ 4 | .  .  .  .  .  .  .  . |
+ 3 | .  .  .  .  .  .  .  . |
+ 2 | P [P] P  P  P  P  P  P |
+ 1 | R  N  B  Q  K  B  N  R |
+   +------------------------+
+     a  b  c  d  e  f  g  h*/
+//   0  1  2  3  4  5  6  7
+/******************************
+{
+    "b2": {
+        "attacking": null,
+        "defending": null,
+        "defenses": [
+            "c1"
+        ],
+        "piece": {
+            "color": "white",
+            "type": "pawn"
+        },
+        "sights": [
+            "a3",
+            "c3"
+        ],
+        "threats": null,
+        "moves": [ "b3", "b4" ] //added, from chess js
+    }
+}
+attacking :anger:, defending :shield?:, moves :play: or ::
+*/
+
+
+
+
+
+//SHOW ONLY LETTERS AND NUMBERS FOR POSSIBLE MOVES
+function addEmojiArray(guildid, boardMessage, emojiArray, filter) {
     var returns = [];
-    emoji_board_row
-    .concat(emoji_board_column)
-    .concat( emoji_board_toolkit)
-        .forEach(function(item, index) {
-            returns.push( boardMessage.react(item) );
+    const useFilter = typeof filter === 'undefined' 
+        ? (t) => true
+        : filter;
+
+    var prevWait = null;
+    //console.log('addEmojiArray-1', emojiArray);
+    emojiArray
+        .filter(useFilter)
+        .forEach(function (item, index) {
+            //console.log('addEmojiArray', item);
+            const newWait = prevWait === null
+                ? boardMessage.react(item)
+                : prevWait.then(t => boardMessage.react(item));
+
+            returns.push(newWait);
+            prevWait = newWait;
         });
-        
-    return Prmoise.all(returns);
+
+    return prevWait;
 }
 
 
-function showBoard(guildid, channel, existingGame) {
+function showBoard(guildid, channel, existingGame, reactionArray) {
     if (typeof existingGame.chessjs === 'undefined' || existingGame.chessjs === null) return;
 
-    const isWhiteNext = existingGame.chessjs.turn() === 'w';
-    const whonextid = existingGame.isWhite
-        ? isWhiteNext ? existingGame.authorid : existingGame.targetid
-        : isWhiteNext ? existingGame.targetid : existingGame.authorid;
-    
-    return message
-        .send('```' + existingGame.chessjs.ascii() + '```' + '\n<@' + whonextid + '> to play...')
-        .then(sentMessage => addMoveHelperEmojis(guildid, sentMessage, existingGame);
-        //.catch(console.log);
+    const whonext = whoIsNext(guildid, existingGame.authorid, existingGame.targetid, channel.id)
+    const whoNextGame = repo.dbGetForUserKey(guildid, whonext.whonextid, channel.id);
+
+    var data = '';
+    if (typeof whoNextGame[0].data !== 'undefined') {
+        const dataJoined = whoNextGame[0].data.join('');
+        if (dataJoined.length === 2) {
+            data = '**' + dataJoined + '** is selected.';
+        } else if (dataJoined.length === 4) {
+            data = '**' + datajoined + '**';
+        }
+    }    
+
+    return channel
+        .send('```' + existingGame.chessjs.ascii() + '```' + '\n<@' + whonext.whonextid + '> to play... ' + data)
+        .then(sentMessage => addEmojiArray(guildid, sentMessage, reactionArray));
 }
 
 function chessyInfo(guildid, channelid, messageauthorid, gameKeysInThisChannel, infoThing, chessjs, channel) {
     const fen = chessjs.fen();
     const infoString = JSON.stringify(chessy.getInfo(fen, [infoThing]), null, '\t');
-
-    //const firstInfoThing = infoThing.length > 0
-    //    ? infoThing[1]
-    //    : '';
 
     const moves = infoThing.match(VALID_SQUARE_REGEX)
         ? '\nPossible moves for ' + infoThing + ': ' + chessjs.moves({ square: infoThing })
@@ -423,14 +508,13 @@ function reactGameInvite(guildid, channel, userid, authorid, isAcceptance, isWhi
         repo.dbUpdateForGame(guildid, authorid, channelid, { state: NS_ACCEPTED });
 
         // CHECK ITS SAVED HERE
-        console.log('react gamne unvite', repo.dbGetAll(guildid));
+        //console.log('react gamne unvite', repo.dbGetAll(guildid));
 
         const game = repo.dbGetForUserKey(guildid, authorid, channelid);
-        console.log(game);
-        //console.log('reactGameInvite', guildid, repo.dbGetGame(guildid, keys), 'and then', keys[0]);
+        //console.log(game);
 
         return channel.send("It's ON! ")
-            .then(t => showBoard(guildid, channelid, game[0]));
+            .then(t => showBoard(guildid, channel, game[0], emoji_board_toolkit));
 
     } else {
         return cancelGame(guildid, channelid, authorid);
@@ -517,33 +601,111 @@ function startBot() {
                 logger.info('Logged in as: ');
                 logger.info(bot.username + ' - (' + bot.id + ')');
 
-                bot.guilds.forEach(function (f) { repo.dbMakeDb(f.id); console.log('ready', f);});
+                bot.guilds.forEach(function (f) { repo.dbMakeDb(f.id); console.log('!ready:', f.id);});
             });
 
             bot.on('messageReactionAdd', function (reaction, user) {
                 if (user.id === bot.user.id) {
                     return;
                 }
-
-                const isAcceptance = reaction.emoji.name == EMOJI_ACCEPT_GAME;
-                const isRejection = reaction.emoji.name == EMOJI_REJECT_GAME;
-
-                if (!isAcceptance && !isRejection) {
+                if (reaction.message.author.id !== bot.user.id) {
                     return;
                 }
 
                 const guildid = reaction.message.channel.guild.id;
-                console.log('messageReactionAdd', guildid);
                 const userid = user.id;
                 const channelid = reaction.message.channel.id;
+                
+                console.log('messageReactionAdd', guildid);
 
-                const authorGame = repo.dbGetGameFromTarget(guildid, userid, channelid);
-                if (authorGame.length === 0) {
+                //const authorGame = repo.dbGetGetForUser(guildid, userid, channelid)
+                const authorKeys = repo.dbGetGameKeysForUser(guildid, userid, channelid);
+                if (authorKeys.length === 0) {
+                    console.log('testing reaction keys', repo.dbGetGameKeysForUser(guildid, userid, channelid));
                     return;
                 }
 
-                reactGameInvite(guildid, reaction.message.channel, userid, authorGame[0].authorid, isAcceptance, !authorGame[0].isWhite)
-                    .catch(console.log);
+                const authorGame = repo.dbGetGame(guildid, authorKeys);
+                console.log('isTarget = authorGame[0].targetid === userid;', authorGame, authorGame[0].targetid , userid);
+                const isTarget = authorGame[0].targetid === userid;
+
+                const reactionEmojiName = reaction.emoji.name;
+                const isAcceptance = reactionEmojiName == EMOJI_ACCEPT_GAME;
+                const isRejection = reactionEmojiName  == EMOJI_REJECT_GAME;
+
+                console.log('testing next bit', isTarget, '&&', authorGame[0].state, '==', NS_INVITED, '&&', isAcceptance, '||', isRejection);
+
+                if (isTarget && authorGame[0].state == NS_INVITED && (isAcceptance || isRejection)) {
+                    reactGameInvite(guildid, reaction.message.channel, userid, authorGame[0].authorid, isAcceptance, !authorGame[0].isWhite)
+                        .catch(console.log);
+                        return;
+                }
+
+                const isauthnext = isAuthorNext(guildid, authorGame[0].authorid, authorGame[0].targetid, channelid);
+                const ourGoNext = (
+                    (authorGame[0].authorid === userid && isauthnext) || 
+                    (authorGame[0].targetid === userid && !isauthnext)
+                );                
+
+                if (!ourGoNext) {
+                    return
+                }
+
+                if (authorGame[0].state === NS_ACCEPTED) {
+                    const reactorGame = repo.dbGetForUserKey(guildid, userid, channelid)[0];
+                    const haveSelection =  typeof reactorGame.data !== 'undefined';// OBTW selected items means theres a thing in the data array TLDR
+    
+                    // if game is in flow and we're dealing with selected pieces
+                    var isProcessed = false;
+                    switch (reactionEmojiName) {
+                        case EMOJI_SHOW_LETTERS:
+                            const letters = haveSelection 
+                                ? getLettersNumbersForValidMoves(reactorGame.data.join(''))
+                                : emoji_navigation_letters;
+                    
+                            addEmojiArray(guildid, reaction.message, emoji_navigation_letters, (t) => letters.includes(t))
+                                .catch(console.log);
+                            isProcessed = true;
+                            break;
+
+                        case EMOJI_SHOW_NUMBERS:
+                            const numbers
+                                = getLettersNumbersForValidMoves(repo.dbGetForUserKey(guildid, userid, channelid)[0].data.join(), authorGame[0])
+                                [1];
+
+                            addEmojiArray(guildid, reaction.message, emoji_navigation_numbers, (t) => numbers(t) )
+                                .catch(console.log);
+                            isProcessed = true;
+                            break;
+
+                        case EMOJI_CLEARSELECTION:
+                            repo.dbUpdateForUser(guildid, userid, channelid, {data:[]});
+                            isProcessed = true;
+                            break;
+
+                    }
+                    if (isProcessed) {
+                        return;
+                    }
+                }
+
+                if (emoji_navigation_numbers.includes(reactionEmojiName) ) {
+                    processVerb(guildid, reaction.message, channelid, userid, repo.dbGetGameKeysForUser(guildid, userid, channelid), {
+                        verb: 'data',
+                        data: emoji_navigation_numbers.indexOf(reactionEmojiName) + 1,
+                        userid: userid
+
+                    });
+                    return;
+                } else if (emoji_navigation_letters.includes(reactionEmojiName) ) {
+                    processVerb(guildid, reaction.message, channelid, userid, repo.dbGetGameKeysForUser(guildid, userid, channelid), {
+                        verb: 'data',
+                        data: letters[emoji_navigation_letters.indexOf(reactionEmojiName)],
+                        userid: userid
+                    });
+                    return;
+                }
+
             });
 
             bot.on('message', function (message) {
@@ -571,6 +733,8 @@ function startBot() {
                 const gameKeysInThisChannel = repo.dbGetGameKeysForUser(guildid, messageauthorid, channelid);
 
                 const parsedMessage = parser.parseMessage(bot, messageauthorid, channelid, content, allNonBotMentions, gameKeysInThisChannel);
+
+                console.log('parsedMessage', parsedMessage);
 
                 processVerb(guildid, message, channelid, messageauthorid, gameKeysInThisChannel, parsedMessage);
 
@@ -606,7 +770,7 @@ function processVerbPlay(guildid, message, channelid, messageauthorid, gameKeysI
             console.log('/* no existing game, start a new one: make an invite */');
 
             openGameNegociation(guildid, message, channelid, messageauthorid, parsedMessage.targetid, parsedMessage.timeout, parsedMessage.isWhite)
-                .catch(function (err) { console.log(err); });
+                .catch(console.log);
 
         }
     } else if (existingGame[0].state === NS_INVITED) {
@@ -628,7 +792,7 @@ function processVerbPlay(guildid, message, channelid, messageauthorid, gameKeysI
             console.log('/* they have aready invited this person, so reset the invite to these new parameters */');
 
             reOpenGameNegociation(guildid, message, channelid, messageauthorid, gameKeysInThisChannel, parsedMessage.timeout, parsedMessage.isWhite)
-                .catch(function (err) { console.log(err); });
+                .catch(console.log);
 
         } else if (existingGame[0].targetid === parsedMessage.messageauthorid) {
 
@@ -659,16 +823,38 @@ function getCleanMoveData(restOfMessage) {
     return returnObj;
 }
 
+function whoIsNext(guildid, authorid, targetid, channelid) {
+
+    const authorGame = repo.dbGetForUserKey(guildid, authorid, channelid)[0];
+    if (typeof authorGame === 'undefined' || authorGame === null) {
+        return {whonextid:null, authorGame:null};
+    }
+
+    const chessjs = authorGame.chessjs;
+    if (typeof chessjs === 'undefined' || chessjs === null) {
+        return {whonextid:null, authorGame:authorGame};
+    }
+
+    const isWhiteNext = chessjs.turn() === 'w';
+    const whonextid = authorGame.isWhite
+        ? isWhiteNext ? authorid : targetid
+        : isWhiteNext ? targetid : authorid;
+
+    return { whonextid, authorGame };
+}
+
+function isAuthorNext(guildid, authorid, targetid, channelid) {
+    const whonextid = whoIsNext(guildid, authorid, targetid, channelid).whonextid;
+    return whonextid === authorid;
+}
+
 function movePieceBoyakasha(guildid, channelid, userid, existingGame, cleanedMove, message) {
     const move = cleanedMove.move;
-    const restOfMessage = cleanedMove.restOfMessage.join(' ');
+    const restOfMessage = cleanedMove.restOfMessage;//.join(' ');
 
     const chessjs = repo.dbGetForUserKey(guildid, existingGame.authorid, channelid)[0].chessjs;    
 
-    const isWhiteNext = chessjs.turn() === 'w';
-    const whonextid = existingGame.isWhite
-        ? isWhiteNext ? existingGame.authorid : existingGame.targetid
-        : isWhiteNext ? existingGame.targetid : existingGame.authorid;
+    const whonextid = whoIsNext(guildid, existingGame.authorid, existingGame.targetid, channelid).whonextid;
 
     if (whonextid !== userid) {
         return tellUser(guildid, channelid, userid, ', sorry it\'s not your move yet.', anger, message);
@@ -678,13 +864,10 @@ function movePieceBoyakasha(guildid, channelid, userid, existingGame, cleanedMov
     if (moved === null) {
         const matches = VALID_SQUARE_REGEX.exec(move);
 
-        console.log('matches', matches);
-
         const firstPiece = matches !== null && matches.length > 0 ? matches[0] : restOfMessage ;
 
         var extraInfo = '';
         if (firstPiece.trim().length > 0) {
-            console.log('chessjs', chessjs, 'firstPiece', firstPiece);
             const possibleMoves = chessjs.moves({square: firstPiece });
             extraInfo = possibleMoves.length > 0
                 ? '\n' + 'Valid moves for ' + firstPiece + ': ' + firstPiece + '-*' + possibleMoves.join('*, ' + firstPiece + '-*') + '*'
@@ -692,10 +875,57 @@ function movePieceBoyakasha(guildid, channelid, userid, existingGame, cleanedMov
         }
 
         return tellUser(guildid, channelid, userid, ', sorry unable to move ' + move + extraInfo, anger, message)
-            .then(t => showBoard(guildid, channelid, repo.dbGetForUserKey(guildid, existingGame.authorid, channelid)[0]));
+            .then(t => showBoard(guildid, message.channel, repo.dbGetForUserKey(guildid, existingGame.authorid, channelid)[0], emoji_board_toolkit));
     };
     repo.dbUpdateForUser(guildid, existingGame.authorid, channelid, { chessjs });
-    return showBoard(guildid, channelid, repo.dbGetForUserKey(guildid, existingGame.authorid, channelid)[0]);
+    return showBoard(guildid, message.channel, repo.dbGetForUserKey(guildid, existingGame.authorid, channelid)[0], emoji_board_toolkit);
+}
+
+function getLettersNumbersForValidMoves(piece, existingGame) {
+    var testPiece = piece;
+    if ( testPiece.length < 2) {
+        return [ emoji_navigation_letters, emoji_navigation_numbers ];
+    }
+    if ( testPiece.length % 2 > 0) {
+        testPiece = testPiece.substring(0, testPiece.length-2);
+    }
+    const finalPieces = [];
+    for (var i=0; testPiece.length <= i; i+=2) {
+        finalPieces.push(testPiece[i] + testpiece[i+1]);
+    }
+    const pieceinfo = chessy.getInfo(existingGame.chessjs.fen(), finalPieces);
+
+    console.log('getLettersNumbersForValidMoves', piece, pieceinfo);
+
+    // only showing the first piece atm
+    const letters = pieceinfo[ finalPieces[0] ].sights.map(m => m[0]);
+    const numbers = pieceinfo[ finalPieces[0] ].sights.map(m => m[1]);
+
+    const uniqueLetters = [ ...new Set(letters)];
+    const uniqueNumbers = [ ...new Set(numbers)];
+
+    return [ uniqueLetters, uniqueNumbers ];
+}
+
+function getEmojiListForBoard(guildid, existingGame, messageauthorid) {
+    const userGame = repo.dbGetForUserKey(guildid, messageauthorid, existingGame.channelid);
+    const userData = (typeof userGame === 'undefined')
+        ? [] 
+        : (typeof userGame.data === 'undefined')
+            ? [] 
+            : userGame.data;
+
+    const joined = userData.join('');
+    if (joined.length === 2) {
+        // const moves = getLettersNumbersForValidMoves(joined);
+        // const letters = moves[0];
+        // const numbers = moves[1];
+
+        /* temp, instead return letters and numbers they can move with for this piece */ return emoji_board_toolkit_withselection;
+
+    } else {
+        return emoji_board_toolkit;
+    }
 }
 
 function processVerb(guildid, message, channelid, messageauthorid, gameKeysInThisChannel, parsedMessage) {
@@ -728,14 +958,24 @@ function processVerb(guildid, message, channelid, messageauthorid, gameKeysInThi
 
         case 'info':
             if (isExistingGame) {
+                const messageauthorsgame = existingGame.filter(f => f.key === repo.dbMakeKey(guildid, messageauthorid, channelid));
+                if (typeof messageauthorsgame.data === 'undefined') messageauthorsgame.data = [];
+                console.log('info', messageauthorsgame, parsedMessage.infoThing);
+                if (parsedMessage.infoThing.toLowerCase() === 'clear') {parsedMessage.infoThing = '';};
+                if (parsedMessage.infoThing === '') {
+                    messageauthorsgame.data = [];
+                } else {
+                    messageauthorsgame.data.push(parsedMessage.infoThing);
+                }
+                repo.dbUpdateForUser(guildid, messageauthorid, channelid, { data: messageauthorsgame.data});
                 chessyInfo(guildid, channelid, messageauthorid, gameKeysInThisChannel, parsedMessage.infoThing, existingGame[0].chessjs, message.channel)
                     .catch(console.log);
-            }
+            }                        
             break;
 
         case 'board':
             if (isExistingGame) {
-                showBoard(guildid, message.channel, existingGame[0])
+                showBoard(guildid, message.channel, existingGame[0], getEmojiListForBoard(guildid, existingGame[0], messageauthorid))
                     .catch(console.log);
             }
             break;
@@ -749,8 +989,39 @@ function processVerb(guildid, message, channelid, messageauthorid, gameKeysInThi
                             .catch(console.log);
                         return;
                     }
-                    movePieceBoyakasha(channelid, messageauthorid, existingGame[0], cleanMoveData, message)
+                    movePieceBoyakasha(guildid, channelid, messageauthorid, existingGame[0], cleanMoveData, message)
                         .catch(console.log);
+                }
+            }
+            break;
+
+        case 'data':
+            const isMessageAuthorToPLay = isExistingGame 
+                ? whoIsNext(guildid, existingGame[0].authorid, existingGame[0].targetid, channelid).whonextid === messageauthorid
+                : false;
+    
+            if (isExistingGame && existingGame[0].state === NS_ACCEPTED && isMessageAuthorToPLay) {
+                
+                const updateMe = repo.dbGetForUserKey(guildid, messageauthorid, channelid); 
+
+                if (typeof updateMe[0].data === 'undefined') {
+                    updateMe[0].data = [];
+                }
+                updateMe[0].data.push(parsedMessage.data);
+
+                repo.dbUpdateForUser(guildid, messageauthorid, channelid, { data: updateMe[0].data });
+
+                const piece = updateMe[0].data.join('');
+                // if the data is the coordinate of a piece, then show the OK button
+                if (piece.length == 2) {
+                    existingGame[0].data = updateMe[0].data;
+                    showBoard(guildid, message.channel, existingGame[0], getEmojiListForBoard(guildid, existingGame[0], messageauthorid))
+                        .catch(console.log);
+                } else if (piece.length == 4) {
+                    parsedMessage.verb = 'play';
+                    parsedMessage.restOfMessage = updateMe[0].data;
+                    processVerbPlay(guildid, message, channelid, messageauthorid, gameKeysInThisChannel, parsedMessage, existingGame, isExistingGame);
+                    return;
                 }
             }
             break;
@@ -851,7 +1122,7 @@ var htmlServerInterval = setInterval(function () {
             staticServer.serve(request, response, function (e, res) {
 
                 if (e && (e.status === 404)) { // If the file wasn't found
-                    console.log(reqData.pathname);
+                    console.log('path:', reqData.pathname);
                     switch (reqData.pathname) {
                         case '/gamesdata':
                             adminDumpGames(bot, gameData, response, reqData);

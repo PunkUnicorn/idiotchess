@@ -65,17 +65,24 @@ function parseMessage(bot, messageuserid, channelid, content, allNonBotMentions,
                 restOfMessage.push(cleantoken);
             } else {
                 switch (cleantoken) {
+                    case 's': cleantoken = 'select'; retry = true; break;
                     case 'i': cleantoken = 'info'; retry = true; break;
                     case 'l': cleantoken = 'list'; retry = true; break;
                     case 't': cleantoken = 'timeout'; retry = true; break;
                     case 'b': cleantoken = 'board'; retry = true; break;
                     case 'm': cleantoken = 'move'; retry = true; break;
 
+                    case 'data':
+                        isInfoMode = true;
+                        verb = 'data';
+                        break;
+
                     case 'information':
                     case 'show':
                     case 'info':
+                    case 'select':
                         isInfoMode = true;
-                        verb = cleantoken;
+                        verb = 'info';
                         break;
 
                     case 'list':
@@ -148,6 +155,10 @@ function parseMessage(bot, messageuserid, channelid, content, allNonBotMentions,
         blackPlayer = (typeof target !== 'undefined' && target !== null)
             ? target.id
             : null;
+    }
+
+    if (isInfoMode && infoThing === null) {
+        infoThing = '';
     }
 
     return {
