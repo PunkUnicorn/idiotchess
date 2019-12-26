@@ -1,27 +1,14 @@
 ﻿const TAFFY = require('taffy');
 
 const gamesMap = new Map();
-const gamesObj = {};
 
 function dbMakeDb(guildid) {
-    //gamesObj['T'+guildid] = TAFFY();
     return gamesMap.set(guildid, TAFFY());
 }
 function dbGetGuildGame(guildid) {
     if (typeof guildid === 'undefined') throw 'no guildid';
     if (!gamesMap.has(guildid)) throw 'unknown guildid ' + guildid;
-    //if (typeof gamesObj['T' + guildid] === 'undefined') {
-    //    throw 'wut';
-    //    //gamesObj['T' + guildid] = TAFFY();
-    //    //console.log('****************************************** unexpected making of DB for ' + guildid);
-    //}
-    //if (gamesObj['T' + guildid] === null) throw 'urgh';
-    //console.log('dbGetGuildGame', guildid, gamesObj['T' + guildid]());
-    //return (gamesObj['T' + guildid]);
     return gamesMap.get(guildid);
-
-
-            //return typeof query === 'undefined' ? gamesObj['T' + guildid]() : gamesObj['T' + guildid](query);
 }
 
 function dbMakeKey(guildid, userid, channelid) {
@@ -61,9 +48,6 @@ function dbUpdateGameTarget(guildid, authorid, channelid, targetid, targetStuff)
         authorid,
         authorkey
     }).update(targetStuff);
-
-    //games({ key: authorkey })
-    //    .update({ targetid, targetkey });
 }
 
 /* updates all properties for where this user is an author or target */
@@ -77,32 +61,29 @@ function dbUpdateForGame(guildid, userid, channelid, game) {
 
 /* gets all game keys where the user is an author or target */
 function dbGetGameKeysForUser(guildid, userid, channelid) {
-    const findKey = [{ authorid: userid }, {targetid: userid} ];
-    // const findKey = typeof channelid !== 'undefined'
-    //     ? { key: dbMakeKey(guildid, userid, channelid) }
-    //     : [{ authorid: userid }, {targetid: userid} ];
+    const findKey 
+        = (typeof channelid === 'undefined') 
+            ? [{ authorid: userid }, 
+                { targetid: userid }]
+
+            : [{ authorid: userid, channelid }, 
+                { targetid: userid, channelid }];
 
     var db = dbGetGuildGame(guildid);
-
-    console.log('dbGetGameKeysForUser', findKey);
-    const keys = db(findKey)
-        .select('authorkey', 'targetkey', 'key');
-
-    console.log('findKey', findKey, 'and keys', keys);
+    const keys = db(findKey).select('authorkey', 'targetkey', 'key');
 
     if (keys.length > 0) {
-        var definedKeys = [];
-        for (var i = 0; keys.length > i; i++) {
-            console.log('findKey2', i, keys[i]);
 
+        var definedKeys = [];
+
+        for (var i = 0; keys.length > i; i++) {
             keys[i]
                 .filter(f => typeof f !== 'undefined')
-                .forEach(function (val) {
-                    definedKeys.push(val); console.log('definedKeys.push(val)', val);
+                .forEach(function (val) {        
+                    definedKeys.push(val);        
                 });
         }
 
-        console.log([...new Set(definedKeys)]);
         return [ ...new Set(definedKeys) ];
     }
     return [];
@@ -127,7 +108,6 @@ function dbRemoveGame(guildid, userid, channelid) {
 
 function dbGetGame(guildid, keys) {
     const result = dbGetGuildGame(guildid)({ key: keys }).get();
-    console.log('dbGetGame', result, keys);
     return typeof result === 'undefined'
         ? [[{}]]
         : result;
@@ -139,12 +119,43 @@ function dbGetAll(guildid) {
 
 function dbGetForUserKey(guildid, userid, channelid) {
     const db = dbGetGuildGame(guildid);
-    //console.log('dbGetForUserKey 1', gamesMap.keys());
-    //console.log('dbGetForUserKey 2', guildid, db().get(), db({ key: dbMakeKey(guildid, userid, channelid) }).get());
     return db({ key: dbMakeKey(guildid, userid, channelid) }).get().filter(f => typeof f !== 'undefined');
 }
 
+/*
+https://www.asciiart.eu/electronics/clocks
 
+
+     |        |
+     _|________|_
+    |____________|
+      |        |
+      |        |
+      |        |
+     |          |
+     |          |
+     |          |
+     |          |
+    _|__________|_
+  _/______________\_
+ /  ______________  \
+|  |  _     _  _  |  |
+|  | |_| o | | _| |  |\
+|  |  _| o |_| _| |  | |
+|  |______________|  |/
+|                __  |
+|  _   _   _    |  | |\
+| |_| |_| |_|   |__| |/
+\____________________/
+   \______________/
+     |          |
+     |          |
+     |          |
+     |          |
+     |          |
+      |        |
+      |   ()   |                     
+*/
 
 const timerMap = new Map();
 
