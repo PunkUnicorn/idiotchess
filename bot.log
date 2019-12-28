@@ -1,0 +1,49 @@
+Waiting for the machine to warm up a bit, please wait....
+{"message":"Connected","level":"info"}
+{"message":"Logged in as: ","level":"info"}
+{"message":"undefined - (undefined)","level":"info"}
+!ready: 650762337208500295
+Server running at http://127.0.0.1:8081
+503218119662239746 653307928924782654 <@!655380998711934977> play <@!616005633250033665> <-------- on message
+[ 'play' ]
+cleantoken play
+/* not an existing game */
+/* no existing game, start a new one: make an invite */
+messageReactionAdd 650762337208500295
+616005633250033665 653307928924782654 <@!655380998711934977> move b1 c3 <-------- on message
+[ 'move', 'b1', 'c3' ]
+cleantoken move
+cleantoken b1
+cleantoken c3
+503218119662239746 653307928924782654 board <-------- on message
+[ 'board' ]
+cleantoken board
+503218119662239746 653307928924782654 move b1c3 <-------- on message
+[ 'move', 'b1c3' ]
+cleantoken move
+cleantoken b1c3
+616005633250033665 653307928924782654 move g2g6 <-------- on message
+[ 'move', 'g2g6' ]
+cleantoken move
+cleantoken g2g6
+messageReactionAdd 650762337208500295
+messageReactionAdd 650762337208500295
+616005633250033665 653307928924782654 select 7g <-------- on message
+[ 'select', '7g' ]
+cleantoken select
+cleantoken 7g
+616005633250033665 653307928924782654 move f6 <-------- on message
+[ 'move', 'f6' ]
+cleantoken move
+cleantoken f6
+messageReactionAdd 650762337208500295
+messageReactionAdd 650762337208500295
+messageReactionAdd 650762337208500295
+messageReactionAdd 650762337208500295
+messageReactionAdd 650762337208500295
+messageReactionAdd 650762337208500295
+messageReactionAdd 650762337208500295
+messageReactionAdd 650762337208500295
+messageReactionAdd 650762337208500295
+messageReactionAdd 650762337208500295
+path: /logsdata

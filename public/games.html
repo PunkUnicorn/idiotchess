@@ -11,8 +11,6 @@
         <input id="refresh" type="button" value="Refresh" />       
         <div id="gamesholder">
         </div>
-        <div id="gamesholder-alt">
-        </div>
     </section>
 
     <!--<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery.json2html/1.2.0/jquery.json2html.min.js"></script>-->
@@ -75,6 +73,7 @@
 
                 let jsonobj = JSON.parse(data);
                 $("#gamesholder")[0].insertAdjacentHTML("beforeend", "<p>" + toHtml(jsonobj));
+                //$("#gamesholder").html(data);
 
             });            
         }

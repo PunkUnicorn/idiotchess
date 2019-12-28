@@ -56,9 +56,11 @@ function parseMessage(bot, messageuserid, channelid, content, allNonBotMentions,
             var retry = false;
 
             if (isInfoMode) {
+                if (cleantoken === 'clear' || cleantoken === 'reset') {
+                    cleantoken = null; //clears the selection
+                }
                 infoThing = cleantoken;
                 isInfoMode = false;
-                verb = 'info';
             } else if (isListMode) {
                 listThing = cleantoken;
                 //verb = 'list';
@@ -85,9 +87,14 @@ function parseMessage(bot, messageuserid, channelid, content, allNonBotMentions,
                     case 'information':
                     case 'show':
                     case 'info':
-                    case 'select':
                         isInfoMode = true;
                         verb = 'info';
+                        break;
+
+                    case 'select':
+                    case 'selection':
+                        isInfoMode = true;
+                        verb = 'select';
                         break;
 
                     case 'list':
@@ -164,12 +171,12 @@ function parseMessage(bot, messageuserid, channelid, content, allNonBotMentions,
             : null;
     }
 
-    if (isInfoMode && infoThing === null) {
-        infoThing = '';
+    if (isInfoMode && infoThing === '') {
+        infoThing = null;
     }
 
     return {
-        messageuserid,
+        messageauthorid: messageuserid,
         channelid,
         targetid: (target === null) ? null : target.id,
 

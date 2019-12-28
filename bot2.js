@@ -31,7 +31,7 @@ const NT_GAME = 1, NT_DRAW = 2, NT_MODECHANGE = 3;
 const NS_INVITED = 1, NS_ACCEPTED = 2, NS_REJECTED = 3;
 
 /* destroy the invite timer, and also optionally update the properties in the last parameter while setting the timer to null */
-function destroyInviteTimer(guildid, channelid, messageauthorid, removefromdb, alsoupdatethese) {
+function destroyInviteTimer(guildid, channelid, gameauthor, removefromdb, alsoupdatethese) {
     if (typeof removefromdb === 'undefined') {
         removefromdb = false;
     }
@@ -39,71 +39,92 @@ function destroyInviteTimer(guildid, channelid, messageauthorid, removefromdb, a
         alsoupdatethese = {};
     }
 
-    const timer = repo.timerGet(guildid, channelid, messageauthorid);
+    const timer = repo.timerGet(guildid, channelid, gameauthor);
 
     if (timer !== null) {
 
         clearInterval(timer);
-        repo.timerClear(guildid, channelid, messageauthorid);
+        repo.timerClear(guildid, channelid, gameauthor);
 
         if (removefromdb) {            
-            repo.dbUpdateForUser(guildid, messageauthorid, channelid, alsoupdatethese);
+            repo.dbUpdateForUser(guildid, gameauthor, channelid, alsoupdatethese);
         }
     }
+}
+
+function tellUserOfCancel(guildid, channelid, messageauthorid, options) {
+    options = typeof options === 'undefined' ? {} : options;
+
+    const optionalGameKeysInThisChannel = options.optionalGameKeysInThisChannel;
+    const optionalMessage = options.optionalMessage;
+    const deleteIt = typeof options.deleteIt !== 'undefined' && options.deleteIt;
+
+    const game = typeof optionalGameKeysInThisChannel === 'undefined'
+        ? repo.dbGetGame(guildid, repo.dbGetGameKeysForUser(guildid, messageauthorid, channelid))
+        : repo.dbGetGame(guildid, optionalGameKeysInThisChannel);
+
+
+    if (game.length === 0) {
+        throw 'err: no game to cancel';
+    }
+
+    if (deleteIt) {
+        cancelGame(guildid, channelid, messageauthorid);
+    }
+
+    const authorsGame = game.filter(f => f.isAuthor);
+    if (authorsGame.length === 0) {
+        return tellUser(guildid, channelid, messageauthorid, question_mark + ' *error* : no games, wut ' + question_mark, question_mark, optionalMessage);
+    }
+
+    const msg = (authorsGame[0].state === NS_INVITED)
+        ? (messageauthorid === authorsGame[0].targetid
+            ? ', <@!' + authorsGame[0].targetid + '> has not accepted your invitation.' //invite cancelled by target
+            : ' game invite to <@!' + authorsGame[0].targetid + '> cancelled.') //invite cancelled by author
+
+        : ', your game with ' +  // game in flow cancelled by somebody
+            '<@!' + authorsGame[0].targetid +
+            '> has been cancelled.';
+
+    return tellUser(
+        guildid,
+        channelid,
+        authorsGame[0].authorid,
+        msg,
+        broken_heart,
+        optionalMessage);
 }
 
 function cancelGame(guildid, channelid, messageauthorid, options) {
     options = typeof options === 'undefined' ? {} : options;
 
     const optionalGameKeysInThisChannel = options.optionalGameKeysInThisChannel;
-    const optionalMessage = options.optionalMessage;
 
     const game = typeof optionalGameKeysInThisChannel === 'undefined'
         ? repo.dbGetGame(guildid, repo.dbGetGameKeysForUser(guildid, messageauthorid, channelid))
         : repo.dbGetGame(guildid, optionalGameKeysInThisChannel);
 
-    if (game.length > 0) {
-        destroyInviteTimer(guildid, channelid, messageauthorid);
-        repo.dbRemoveGame(guildid, messageauthorid, channelid);
 
-        const authorsGame = game.filter(f => f.isAuthor);
-        if (authorsGame.length === 0) {
-            return tellUser(guildid, channelid, messageauthorid, question_mark + ' *error* : no games, wut ' + question_mark, question_mark, optionalMessage);
-        }
+    if (game.length === 0) {
+        throw 'err: no game to cancel';
+    }
+    destroyInviteTimer(guildid, channelid, game[0].authorid); ///---
+    repo.dbRemoveGame(guildid, messageauthorid, channelid);
 
-        console.log('cancelGame', game, authorsGame[0], '<-- cancelGame');
-        const msg = (authorsGame[0].state === NS_INVITED)
-            ? (messageauthorid === authorsGame[0].targetid
-                ? ', <@!' + authorsGame[0].targetid + '> has not accepted your invitation.' //invite cancelled by target
-                : ' game invite to <@!' + authorsGame[0].targetid + '> cancelled.') //invite cancelled by author
-
-            : ' has cancelled the game between ' +  // game in flow cancelled by somebody
-                '<@!' + authorsGame[0].authorid + '> and <@!' + authorsGame[0].targetid +
-                '>';
-
-        return tellUser(
-            guildid, 
-            channelid,
-            messageauthorid,
-            msg,
-            broken_heart,
-            optionalMessage);
-    } else {
-        if (typeof optionalMessage !== undefined) {
-            return optionalMessage.react(question_mark);
-        } else {
-            return tellUser(
-                guildid, 
-                channelid,
-                messageauthorid,
-                question_mark);
-        }
+    const authorsGame = game.filter(f => f.isAuthor);
+    if (authorsGame.length === 0) {
+        throw 'err: wut no games';
     }
 }
 
 function timeoutOpenedNegociations(guildid, message, channelid, messageauthorid, targetid) {
-    const timeoutMsg = ', your invitation has timed out';
+    const timeoutMsg = ', your invitation has timed out.';
     return tellUsers(guildid, channelid, [messageauthorid, targetid], timeoutMsg, broken_heart, message);
+}
+
+function reOpenGameNegociation(guildid, message, channelid, messageauthorid, targetid, timeout, isWhite) {
+    cancelGame(guildid, channelid, messageauthorid);
+    return openGameNegociation(guildid, message, channelid, messageauthorid, targetid, timeout, isWhite);
 }
 
 function openGameNegociation(guildid, message, channelid, messageauthorid, targetid, invitetimeoutmins, iswhite) {
@@ -126,8 +147,8 @@ function openGameNegociation(guildid, message, channelid, messageauthorid, targe
                                     // Interval timeout
                                     const timer = setInterval(
                                         function (guildid, channelid, messageauthorid, targetid) {
-                                            cancelGame(guildid, channelid, messageauthorid, { optionalMessage: message })
-                                                .then(t => timeoutOpenedNegociations(guildid, message, channelid, messageauthorid, targetid))
+                                            cancelGame(guildid, channelid, messageauthorid);
+                                            timeoutOpenedNegociations(guildid, message, channelid, messageauthorid, targetid)
                                                 .catch(console.log);
 
                                         }, invitetimeoutmins * 1000 * 60, guildid, channelid, messageauthorid, targetid);
@@ -154,7 +175,7 @@ function tellThemTheListOfGames(guildid, channelid, userid, message) {
     const allTheirGames = repo.dbGetGame(guildid, repo.dbGetGameKeysForUser(guildid, userid /*, wayt - leve this out to get all channels --> channelid*/));
 
     if (allTheirGames.length === 0) {
-        return tellUser(guildid, channelid, userid, ' *You have no games*', information, message);
+        return tellUser(guildid, channelid, userid, ' *You have no games.*', information, message);
     }
 
     const displayTheirGamesInProgress
@@ -182,11 +203,11 @@ function tellThemTheListOfGames(guildid, channelid, userid, message) {
                     ? '*Invited*'
                     : '*Playing*';
 
-                return author + ' vs ' + targetUsername + ' in ' + channel + ', ' + state + ', ...';// + ((moveObjs.channelID === val.data.channelID) ? ' <-- *You are here*' : '');
+                return author + ' vs ' + targetUsername + ' in ' + channel + ', ' + state + ', ...';
             });
     
     const msg = '*List:*  \n\t' + displayTheirGamesInProgress.join("\n\t");
-    return message.channel//bot.channels.find('id', channelid)
+    return message.channel
         .send(msg + '\n\n ...also: ' + JSON.stringify(repo.dbGetAll(guildid)[0]))
         .then(function (result) {
             result.react(information).catch(console.log);
@@ -200,7 +221,7 @@ function tellUser(guildid, channelid, tellthisuserid, speak, optionalemoji, opti
         : optionalmessage.channel;
 
     const emojiAddition = typeof optionalemoji !== 'undefined'
-        ? ' ' + optionalemoji + ' '
+        ? '' //' ' + optionalemoji + ' '
         : '';
 
     return channel.send(emojiAddition + '<@!' + tellthisuserid + '>' + speak + emojiAddition)
@@ -340,8 +361,8 @@ const EMOJI_CLEARSELECTION = emoji_crossundo;
 const EMOJI_SETTINGS = emoji_gear;
 
 
-const emoji_board_toolkit = [ EMOJI_SHOW_LETTERS, EMOJI_SHOW_NUMBERS /* EMOJI_SCROLL_LOLWUT, emoji_pawprints, empji_rightcurvinguparrow, empji_leftcurvingdownarrow2, EMOJI_SETTINGS*/  ];
-const emoji_board_toolkit_withselection = [ EMOJI_SHOW_LETTERS, EMOJI_SHOW_NUMBERS, EMOJI_INFO, EMOJI_CLEARSELECTION /* EMOJI_SCROLL_LOLWUT, emoji_pawprints, empji_rightcurvinguparrow, empji_leftcurvingdownarrow2, EMOJI_SETTINGS*/  ];
+const emoji_board_toolkit = [EMOJI_SHOW_LETTERS, EMOJI_SHOW_NUMBERS ];
+const emoji_board_toolkit_withselection = [EMOJI_SHOW_LETTERS, EMOJI_SHOW_NUMBERS, EMOJI_INFO, EMOJI_CLEARSELECTION ];
 
 const emoji_navigation_numbers = [ emoji_1, emoji_2, emoji_3, emoji_4, emoji_5, emoji_6, emoji_7, emoji_8];
 const emoji_navigation_letters = [ emoji_a, emoji_b, emoji_c, emoji_d, emoji_e, emoji_f, emoji_g, emoji_h];
@@ -414,37 +435,95 @@ function addEmojiArray(guildid, boardMessage, emojiArray, filter) {
     return Promise.all(returns);
 }
 
+function isValidMove(fen, move) {
+    try {
+        if (move === null || move.length < 2) return false;
+        return (new Chess(fen).move(move, {sloppy:true}) !== null);
+    } catch (err) {
+        console.log('isValidMove',fen, move, err);
+        return false;
+    }
+}
 
-function showBoard(guildid, channel, existingGame, reactionArray) {
+function isValidPiece(fen, piece) {
+    try {
+        if (piece === null || piece.length < 2) return false;
+        return (new Chess(fen).get(piece) !== null);
+    } catch (err) {
+        console.log('isValidPiece', fen, piece, err);
+        return false;
+    }
+}
+
+
+function showBoard(guildid, channel, existingGame, reactionArray, selected) {
+    if (typeof selected === 'undefined') selected = null;
     if (typeof existingGame.chessjs === 'undefined' || existingGame.chessjs === null) return;
 
     const whonext = whoIsNext(guildid, existingGame.authorid, existingGame.targetid, channel.id)
     const whoNextGame = repo.dbGetForUserKey(guildid, whonext.whonextid, channel.id);
 
-    var data = '';
-    if (typeof whoNextGame[0].data !== 'undefined') {
-        const dataJoined = whoNextGame[0].data.join('');
-        if (dataJoined.length === 2) {
-            data = '**' + dataJoined + '** is selected.';
-        } else if (dataJoined.length === 4) {
-            data = '**' + datajoined + '**';
+    var haveData = typeof whoNextGame[0].data !== 'undefined' && typeof whoNextGame[0].data.length > 0;
+    var haveSelection = false;
+
+    //if (selected === null) {
+        if (whoNextGame.length > 0 && typeof whoNextGame[0].data !== 'undefined') {
+            if (typeof existingGame.chessjs !== 'undefined' && existingGame.chessjs !== null) {
+                const dataJoined = whoNextGame[0].data.join('');
+
+                const isValidPieceResult = isValidPiece(existingGame.chessjs.fen(), dataJoined);
+                const isValidMoveResult = isValidMove(existingGame.chessjs.fen(), dataJoined);
+
+                if (isValidPieceResult || isValidMoveResult) {
+                    selected = dataJoined;
+                }
+            }
         }
-    }    
+    //}    
 
-
-    var ascii = '';
-    if (whoNextGame[0].isWhite) {
-        ascii = existingGame.chessjs.ascii();
-    } else {
-        ascii = existingGame.chessjs.ascii().split('').reverse().join('');
-        var asciia = ascii.split("\n");
-        asciia.shift();
-        ascii = '  ' + asciia.join('\n');
+    var dataStr = '';
+    if (selected !== null && selected.length > 0) {
+        haveSelection = true;
+        dataStr = '**' + selected + '**  is selected.\t\t';
+    } else if (haveData) {
+        dataStr = question_mark + whoNextGame[0].data.join('') + question_mark + '  is selected.\t\t';
     }
 
-    return channel
-        .send('```' + ascii + '```' + '\n<@' + whonext.whonextid + '> to play... ' + data)
-        .then(sentMessage => addEmojiArray(guildid, sentMessage, reactionArray));
+    var ascii = existingGame.chessjs.ascii();
+
+
+    if (!whoNextGame[0].isWhite) {
+        ascii = ascii
+            .split('')
+            .reverse()
+            .join('');
+
+        var asciia = ascii.split("\n");
+        asciia.shift();
+        ascii = '  ' + asciia
+            .join('\n');
+    }
+
+    const additionalEmoji = [];
+    if (haveSelection) {
+        additionalEmoji.push(EMOJI_INFO);
+    }
+    if (haveData) {
+        additionalEmoji.push(EMOJI_CLEARSELECTION);
+    }
+
+    if (additionalEmoji.length > 0) {
+        return channel
+            .send('```' + ascii + '```' + dataStr +'\n<@' + whonext.whonextid + '> to play... ')
+            .then(sentMessage => addEmojiArray(guildid, sentMessage, additionalEmoji))
+                .then(sentReactionArray => {
+                    addEmojiArray(guildid, sentReactionArray[0].message, reactionArray);
+                });
+    } else {
+        return channel
+            .send(dataStr + '\n' + '```' + ascii + '```\n<@' + whonext.whonextid + '> to play... ')
+            .then(sentMessage => addEmojiArray(guildid, sentMessage, reactionArray));
+    }
 }
 
 function chessyInfo(guildid, channelid, messageauthorid, gameKeysInThisChannel, infoThing, chessjs, channel) {
@@ -452,7 +531,7 @@ function chessyInfo(guildid, channelid, messageauthorid, gameKeysInThisChannel, 
     const infoString = JSON.stringify(chessy.getInfo(fen, [infoThing]), null, '\t');
 
     const moves = infoThing.match(VALID_SQUARE_REGEX)
-        ? '\nPossible moves for ' + infoThing + ': ' + chessjs.moves({ square: infoThing })
+        ? '\nPossible moves for ' + infoThing + ': ' + chessjs.moves({ square: infoThing, verbose: true }).map(m => m.to).join(", ")
         : '';
 
     return channel.send('Info for **' + infoThing + '**:  ' + '```' + infoString + '\n' + moves + '```')
@@ -477,7 +556,7 @@ function reactGameInvite(guildid, channel, userid, authorid, isAcceptance, isWhi
             .then(t => showBoard(guildid, channel, game[0], emoji_board_toolkit));
 
     } else {
-        return cancelGame(guildid, channelid, authorid);
+        return tellUserOfCancel(guildid, channelid, userid, { deleteIt: true });        
     }
 }
 
@@ -544,165 +623,6 @@ logger.add(new logger.transports.Console, {
 logger.level = 'debug';
 
 var bot = null;
-function startBot() {
-    var botInterval = setInterval(function () {
-        clearInterval(botInterval);
-
-        try {
-
-            // Initialize Discord Bot
-            bot = new Discord.Client();
-            bot.login(auth.token);
-
-            bot.on('ready', function () {
-                logger.info('Connected');
-                logger.info('Logged in as: ');
-                logger.info(bot.username + ' - (' + bot.id + ')');
-
-                bot.guilds.forEach(function (f) { repo.dbMakeDb(f.id); console.log('!ready:', f.id);});
-            });
-
-            bot.on('messageReactionAdd', function (reaction, user) {
-                if (user.id === bot.user.id) {
-                    return;
-                }
-                if (reaction.message.author.id !== bot.user.id) {
-                    return;
-                }
-
-                const guildid = reaction.message.channel.guild.id;
-                const userid = user.id;
-                const channelid = reaction.message.channel.id;
-                
-                console.log('messageReactionAdd', guildid);
-
-                const authorKeys = repo.dbGetGameKeysForUser(guildid, userid, channelid);
-                if (authorKeys.length === 0) {
-
-                    return;
-                }
-
-                const authorGame = repo.dbGetGame(guildid, authorKeys);
-                const isTarget = authorGame[0].targetid === userid;
-
-                const reactionEmojiName = reaction.emoji.name;
-                const isAcceptance = reactionEmojiName == EMOJI_ACCEPT_GAME;
-                const isRejection = reactionEmojiName  == EMOJI_REJECT_GAME;
-
-                if (isTarget && authorGame[0].state == NS_INVITED && (isAcceptance || isRejection)) {
-                    reactGameInvite(guildid, reaction.message.channel, userid, authorGame[0].authorid, isAcceptance, !authorGame[0].isWhite)
-                        .catch(console.log);
-                        return;
-                }
-
-                const isauthnext = isAuthorNext(guildid, authorGame[0].authorid, authorGame[0].targetid, channelid);
-                const ourGoNext = (
-                    (authorGame[0].authorid === userid && isauthnext) || 
-                    (authorGame[0].targetid === userid && !isauthnext)
-                );                
-
-                if (!ourGoNext) {
-                    return
-                }
-
-                if (authorGame[0].state === NS_ACCEPTED) {
-                    const reactorGame = repo.dbGetForUserKey(guildid, userid, channelid)[0];
-                    const haveSelection =  typeof reactorGame.data !== 'undefined';// OBTW selected items means theres a thing in the data array TLDR
-    
-                    // if game is in flow and we're dealing with selected pieces
-                    var isProcessed = false;
-                    switch (reactionEmojiName) {
-                        case EMOJI_SHOW_LETTERS:
-                            const letters = haveSelection 
-                                ? getLettersNumbersForValidMoves(reactorGame.data.join(''), authorsGame[0])[0]
-                                : emoji_navigation_letters;
-                    
-                            console.log('planting emoji letters', letters);
-
-                            addEmojiArray(guildid, reaction.message, emoji_navigation_letters, (t) => letters.includes(t))
-                                .catch(console.log);
-                            isProcessed = true;
-                            break;
-
-                        case EMOJI_SHOW_NUMBERS:
-                            const numbers = haveSelection 
-                                ? getLettersNumbersForValidMoves(reactorGame.data.join(''), authorsGame[0])[1]
-                                : emoji_navigation_numbers;
-
-                            console.log('planting emoji numbers', numbers);
-
-                            addEmojiArray(guildid, reaction.message, emoji_navigation_numbers, (t) => numbers.includes(t) )
-                                .catch(console.log);
-                            isProcessed = true;
-                            break;
-
-                        case EMOJI_CLEARSELECTION:
-                            repo.dbUpdateForUser(guildid, userid, channelid, {data:[]});
-                            isProcessed = true;
-                            break;
-
-                    }
-                    if (isProcessed) {
-                        return;
-                    }
-                }
-
-                if (emoji_navigation_numbers.includes(reactionEmojiName) ) {
-                    processVerb(guildid, reaction.message, channelid, userid, repo.dbGetGameKeysForUser(guildid, userid, channelid), {
-                        verb: 'data',
-                        data: emoji_navigation_numbers.indexOf(reactionEmojiName) + 1,
-                        userid: userid
-
-                    });
-                    return;
-                } else if (emoji_navigation_letters.includes(reactionEmojiName) ) {
-                    processVerb(guildid, reaction.message, channelid, userid, repo.dbGetGameKeysForUser(guildid, userid, channelid), {
-                        verb: 'data',
-                        data: letters[emoji_navigation_letters.indexOf(reactionEmojiName)],
-                        userid: userid
-                    });
-                    return;
-                }
-
-            });
-
-            bot.on('message', function (message) {
-                if (message.author.id === bot.user.id)
-                    return;
-
-                const botMentions = message.mentions.users.filter(m => m.id === bot.user.id).array();
-
-                // if this function is not applicable then get out of here ASAP, and don't clog up the indenting on your way out
-                if (typeof botMentions === 'undefined' || botMentions === null || botMentions.length === 0) {
-                    return;
-                }
-
-                const guildid = message.channel.guild.id;
-                const messageauthorid = message.author.id;
-                const channelid = message.channel.id;
-                const content = message.content;
-
-                console.log(messageauthorid, channelid, content, '<-------- on message');
-
-                const allNonBotMentions
-                    = message.mentions.users
-                        .filter(m => m.id !== bot.user.id && m.id !== messageauthorid).array();
-
-                const gameKeysInThisChannel = repo.dbGetGameKeysForUser(guildid, messageauthorid, channelid);
-
-                const parsedMessage = parser.parseMessage(bot, messageauthorid, channelid, content, allNonBotMentions, gameKeysInThisChannel);
-
-                processVerb(guildid, message, channelid, messageauthorid, gameKeysInThisChannel, parsedMessage);
-
-            });
-        } catch (err) {
-            console.log('err:', err);
-        }
-
-    }, 1000 * 2 /* deep breath, count to two */ );
-}
-startBot();
-
 
 function processVerbPlay(guildid, message, channelid, messageauthorid, gameKeysInThisChannel, parsedMessage, existingGame, isExistingGame) {
     if (!isExistingGame) {
@@ -734,21 +654,29 @@ function processVerbPlay(guildid, message, channelid, messageauthorid, gameKeysI
 
         if (existingGame[0].authorid !== parsedMessage.messageauthorid) {
 
-            console.log('/* they have a game invite open *from* someone else, cancel that and make a new invite */');
+            console.log('/* they have a game invite open *from* someone else, cancel that and make a new invite */', existingGame, parsedMessage);
 
-            cancelGame(guildid, channelid, messageauthorid, { optionalGameKeysInThisChannel: gameKeysInThisChannel, optionalMessage: message })
-                .then(function (result) {
-                    openGameNegociation(guildid, message, channelid, messageauthorid, parsedMessage.targetid, parsedMessage.timeout, parsedMessage.isWhite)
-                        .catch(console.log);
-                })
+            tellUserOfCancel(guildid, channelid, messageauthorid, { optionalGameKeysInThisChannel: gameKeysInThisChannel, optionalMessage: message, deleteIt:true })
+                .then(t => openGameNegociation(guildid, message, channelid, messageauthorid, parsedMessage.targetid, parsedMessage.timeout, parsedMessage.isWhite))
                 .catch(console.log);
 
         } else if (existingGame[0].authorid === parsedMessage.messageauthorid) {
 
-            console.log('/* they have aready invited this person, so reset the invite to these new parameters */');
+            if (existingGame[0].targetid === parsedMessage.targetid) {
+                console.log('/* they have aready invited this person, so reset the invite to these new parameters */');
 
-            reOpenGameNegociation(guildid, message, channelid, messageauthorid, gameKeysInThisChannel, parsedMessage.timeout, parsedMessage.isWhite)
-                .catch(console.log);
+                reOpenGameNegociation(guildid, message, channelid, messageauthorid, parsedMessage.targetid, parsedMessage.timeout, parsedMessage.isWhite)
+                    .catch(console.log);
+
+            } else {
+                console.log('/* they have aready invited someomne else, so cancel the previous and start the new one */');
+
+                tellUserOfCancel(guildid, channelid, messageauthorid, { optionalGameKeysInThisChannel: gameKeysInThisChannel, optionalMessage: message, deleteIt:true })
+                    .then(t => openGameNegociation(guildid, message, channelid, messageauthorid, parsedMessage.targetid, parsedMessage.timeout, parsedMessage.isWhite))
+                    .catch(console.log);
+
+            }
+
 
         } else if (existingGame[0].targetid === parsedMessage.messageauthorid) {
 
@@ -780,7 +708,6 @@ function getCleanMoveData(restOfMessage) {
 }
 
 function whoIsNext(guildid, authorid, targetid, channelid) {
-
     const authorGame = repo.dbGetForUserKey(guildid, authorid, channelid)[0];
     if (typeof authorGame === 'undefined' || authorGame === null) {
         return {whonextid:null, authorGame:null};
@@ -823,44 +750,77 @@ function movePieceBoyakasha(guildid, channelid, userid, existingGame, cleanedMov
         const firstPiece = matches !== null && matches.length > 0 ? matches[0] : restOfMessage.join(' ') ;
 
         var extraInfo = '';
-        if (firstPiece.trim().length > 0) {
-            const possibleMoves = chessjs.moves({square: firstPiece });
+        if (firstPiece.trim().length > 1) {
+            const possibleMoves = chessjs.moves({ square: firstPiece, verbose: true  }).map(m => m.to);
             extraInfo = possibleMoves.length > 0
                 ? '\n' + 'Valid moves for ' + firstPiece + ': ' + firstPiece + '-*' + possibleMoves.join('*, ' + firstPiece + '-*') + '*'
                 : restOfMessage;
         }
 
-        return tellUser(guildid, channelid, userid, ', sorry unable to move ' + move + extraInfo, anger, message)
+        return tellUser(guildid, channelid, userid, ', sorry unable to move ' + move + extraInfo + exclamation, exclamation, message)
             .then(t => showBoard(guildid, message.channel, repo.dbGetForUserKey(guildid, existingGame.authorid, channelid)[0], emoji_board_toolkit));
-    };
+    }
+
     repo.dbUpdateForUser(guildid, existingGame.authorid, channelid, { chessjs });
+    repo.dbUpdateForGame(guildid, existingGame.authorid, channelid, { data:[] });
     return showBoard(guildid, message.channel, repo.dbGetForUserKey(guildid, existingGame.authorid, channelid)[0], emoji_board_toolkit);
 }
 
-function getLettersNumbersForValidMoves(piece, existingGame) {
+function getLettersNumbersForValidMoves(piece, existingGame, isWhite) {
     if (typeof piece === 'undefined') return [ emoji_navigation_letters, emoji_navigation_numbers ];
-
-    var testPiece = piece;
-    if ( testPiece.length < 2) {
+    if (piece.length < 2) {
         return [ emoji_navigation_letters, emoji_navigation_numbers ];
     }
+
+    var testPiece = piece;
+
     if ( testPiece.length % 2 > 0) {
         testPiece = testPiece.substring(0, testPiece.length-2);
     }
     const finalPieces = [];
+    var finalPiece = piece;
     for (var i=0; testPiece.length <= i; i+=2) {
         finalPieces.push(testPiece[i] + testpiece[i+1]);
     }
-    const pieceinfo = chessy.getInfo(existingGame.chessjs.fen(), finalPieces);
+    if (finalPieces.length === 0) {
+        finalPiece = piece;
+    } else {
+        finalPiece = finalPieces.join('');
+    }
 
+    //const pieceinfoObj = chessy.getInfo(existingGame.chessjs.fen(), [finalPiece]);
+    //if (typeof pieceinfoObj[finalPiece] === 'undefined' || pieceinfoObj[finalPiece].sights.length === 0) {
+    //    return [emoji_navigation_letters, emoji_navigation_numbers];
+    //}
+    //const pieceinfo = pieceinfo[finalPiece].sights;
+    const pieceinfo = existingGame.chessjs.moves({ square: finalPiece, verbose: true });
+
+    
     // only showing the first piece atm
-    const letters = pieceinfo[ finalPieces[0] ].sights.map(m => m[0]);
-    const numbers = pieceinfo[ finalPieces[0] ].sights.map(m => m[1]);
+    const ourLetters = pieceinfo.map(m => m.to[0]);
+    const ourNumbers = pieceinfo.map(m => m.to[1]);
 
-    const uniqueLetters = [ ...new Set(letters)];
-    const uniqueNumbers = [ ...new Set(numbers)];
 
-    return [ uniqueLetters, uniqueNumbers ];
+    var uniqueLetters = [...new Set(ourLetters)];
+    var uniqueNumbers = [...new Set(ourNumbers)];
+
+    if (!isWhite) {
+        uniqueLetters = uniqueLetters.reverse();
+        uniqueNumbers = uniqueNumbers.reverse();
+    }
+
+    //uniqueLetters.forEach(val => console.log('letters:', val, letters.indexOf(val)));
+    //uniqueNumbers.forEach(val => console.log('numbers:', val, parseInt(val, 10)));
+    const emojiLetters = uniqueLetters.map(val => emoji_navigation_letters[letters.indexOf(val)]);
+    const emojiNumbers = uniqueNumbers.map(val => emoji_navigation_numbers[parseInt(val, 10)-1]);
+
+
+
+
+    //const emojiLetters = uniqueLetters.map(val => (isWhite ? emoji_navigation_letters : emoji_navigation_letters.reverse())[letters.indexOf(val)]);
+    //const emojiNumbers = uniqueNumbers.map(val => (isWhite ? emoji_navigation_numbers : emoji_navigation_numbers.reverse())[numbers.indexOf(val)]);
+
+    return [emojiLetters, emojiNumbers ];
 }
 
 function getEmojiListForBoard(guildid, existingGame, messageauthorid) {
@@ -906,7 +866,7 @@ function processVerb(guildid, message, channelid, messageauthorid, gameKeysInThi
 
         case 'cancel':
             if (existingGame.length > 0) {
-                cancelGame(guildid, channelid, messageauthorid, { optionalGameKeysInThisChannel: gameKeysInThisChannel, optionalMessage: message })
+                tellUserOfCancel(guildid, channelid, messageauthorid, { optionalGameKeysInThisChannel: gameKeysInThisChannel, deleteIt:true })
                     .catch(console.log);
             }
             break;
@@ -927,23 +887,33 @@ function processVerb(guildid, message, channelid, messageauthorid, gameKeysInThi
                 const messageauthorsgame = existingGame.filter(f => f.key === repo.dbMakeKey(guildid, messageauthorid, channelid));
 
                 if (typeof messageauthorsgame.data === 'undefined') messageauthorsgame.data = [];
-                if (parsedMessage.infoThing.toLowerCase() === 'clear') {parsedMessage.infoThing = '';};
+                /*if (parsedMessage.infoThing.toLowerCase() === 'clear') {parsedMessage.infoThing = '';};*/
 
-                if (parsedMessage.infoThing === '') {
-                    messageauthorsgame.data = [];
-                } else {
-                    messageauthorsgame.data.push(parsedMessage.infoThing);
+                var infoThing = messageauthorsgame.data.join('');
+                if (parsedMessage.infoThing.length > 0) {
+                    infoThing = parsedMessage.infoThing;
                 }
 
-                repo.dbUpdateForUser(guildid, messageauthorid, channelid, { data: messageauthorsgame.data});
-                chessyInfo(guildid, channelid, messageauthorid, gameKeysInThisChannel, parsedMessage.infoThing, existingGame[0].chessjs, message.channel)
+                repo.dbUpdateForUser(guildid, messageauthorid, channelid, { data: messageauthorsgame.data });
+
+                /* 
+                  
+                    How to show the info?????
+                  
+                 */
+                /////////////////showInfo(guildid, message.channel, messageauthorsgame, messageauthorid, infoThing);
+
+
+                showBoard(guildid, message.channel, messageauthorsgame, emoji_board_toolkit)
                     .catch(console.log);
+                //chessyInfo(guildid, channelid, messageauthorid, gameKeysInThisChannel, parsedMessage.infoThing, existingGame[0].chessjs, message.channel)
+                //    .catch(console.log);
             }                        
             break;
 
         case 'board':
             if (isExistingGame) {
-                showBoard(guildid, message.channel, existingGame[0], getEmojiListForBoard(guildid, existingGame[0], messageauthorid))
+                showBoard(guildid, message.channel, existingGame[0], emoji_board_toolkit)
                     .catch(console.log);
             }
             break;
@@ -963,33 +933,112 @@ function processVerb(guildid, message, channelid, messageauthorid, gameKeysInThi
             }
             break;
 
+        case 'select':
+            if (isExistingGame) {
+                repo.dbUpdateForUser(guildid, messageauthorid, channelid, { data: [parsedMessage.infoThing] })
+                parsedMessage.infoThing = null;
+            }
+            //fall through.....
+
         case 'data':
             const isMessageAuthorToPLay = isExistingGame 
                 ? whoIsNext(guildid, existingGame[0].authorid, existingGame[0].targetid, channelid).whonextid === messageauthorid
                 : false;
     
             if (isExistingGame && existingGame[0].state === NS_ACCEPTED && isMessageAuthorToPLay) {
-                
+                var boardShow = false;
+
                 const updateMe = repo.dbGetForUserKey(guildid, messageauthorid, channelid); 
 
                 if (typeof updateMe[0].data === 'undefined') {
                     updateMe[0].data = [];
                 }
-                updateMe[0].data.push(parsedMessage.data);
 
-                repo.dbUpdateForUser(guildid, messageauthorid, channelid, { data: updateMe[0].data });
+                var cleaned = [];
+                if (parsedMessage.infoThing !== null) {
+                    updateMe[0].data.push(parsedMessage.infoThing);
+                }
+
+                if (updateMe[0].data.join('').length <= 1) {
+                    cleaned = updateMe[0].data;
+                } else {
+                    updateMe[0].data.join('').split('').forEach(function (val, index, array) {
+                        if (index == 0) return;
+                        if (index === array.length - 1 && index % 2 === 0) {
+                            //odd number, and last one, add to result array or it will get missed since otherwise this function takes chunks of two
+                            cleaned.push(val);
+                        }
+                        if (index % 2 === 0) return;
+
+                        const firstIsNumber = '0123456789'.includes((array[index - 1]).toString());
+                        const secondIsNumber = '0123456789'.includes((array[index]).toString());
+
+                        const firstIsLetter = letters.includes((array[index - 1]).toString());
+                        const secondIsLetter = letters.includes((array[index]).toString());
+
+                        // to help emoji reaction piece selection swap round numbers and letters if numbers come first. The engine likes letters first
+                        if (firstIsNumber && secondIsLetter) {
+                            cleaned.push(val);
+                            cleaned.push(array[index - 1]);
+                        } else if (firstIsLetter && secondIsNumber) {
+                            cleaned.push(array[index - 1]);
+                            cleaned.push(val);
+                        } else {
+                            // probably not recognised format, but the chess engine may understand it
+                            cleaned.push(array[index - 1]);
+                            cleaned.push(val);
+                        }
+
+                    });
+                }
+
+                const readyData = cleaned.join('');
+
+                const saveData = (readyData.length > 0)
+                    ? [readyData]
+                    : (parsedMessage.infoThing !== null)
+                        ? [parsedMessage.infoThing]
+                        : [];
+
+                repo.dbUpdateForUser(guildid, messageauthorid, channelid, { data: saveData });
+                existingGame[0].data = saveData;
 
                 const piece = updateMe[0].data.join('');
-                // if the data is the coordinate of a piece, then show the OK button
-                if (piece.length == 2) {
-                    existingGame[0].data = updateMe[0].data;
-                    showBoard(guildid, message.channel, existingGame[0], getEmojiListForBoard(guildid, existingGame[0], messageauthorid))
-                        .catch(console.log);
-                } else if (piece.length == 4) {
-                    parsedMessage.verb = 'play';
-                    parsedMessage.restOfMessage = updateMe[0].data;
-                    processVerbPlay(guildid, message, channelid, messageauthorid, gameKeysInThisChannel, parsedMessage, existingGame, isExistingGame);
+
+                //auto move
+                if (isValidMove(existingGame[0].chessjs.fen(), piece)) {
+                    parsedMessage.verb = 'move';
+                    parsedMessage.restOfMessage = [piece];
+                    processVerb(guildid, message, channelid, messageauthorid, gameKeysInThisChannel, parsedMessage);//, existingGame, isExistingGame);
                     return;
+                }
+
+                if (piece.length > 1 && piece.length < 4) {
+                    /*
+                     
+                        Really needs a from: and to:, separater to data[]
+
+                    */
+                    // If the data is a valid piece, auto move
+                    if (isValidPiece(existingGame[0].chessjs.fen(), piece)) {
+                        //if (existingGame[0].chessjs.get(piece) !== null) {
+                        boardShow = true;
+                    }
+
+                } //else if (piece.length > 3) {
+                //    if (new Chess(existingGame[0].chessjs.fen()).move(piece) !== null) {
+                //        parsedMessage.verb = 'move';
+                //        parsedMessage.restOfMessage = [piece];
+                //        processVerb(guildid, message, channelid, messageauthorid, gameKeysInThisChannel, parsedMessage, existingGame, isExistingGame);
+                //        return;
+                //    }
+                //}
+                if (parsedMessage.verb == 'select') {
+                    boardShow = true;
+                }
+                if (boardShow) {
+                    showBoard(guildid, message.channel, existingGame[0], emoji_board_toolkit, piece)
+                        .catch(console.log);
                 }
             }
             break;
@@ -997,23 +1046,196 @@ function processVerb(guildid, message, channelid, messageauthorid, gameKeysInThi
         default:
             break;
     }
-
 }
 
-function makeDebugMoveObj(moveObjs) {
-    var target = (typeof moveObjs.target !== 'undefined' && moveObjs.target !== null)
-        ? moveObjs.target
-        : { username: '' };
+function startBot() {
+    var botInterval = setInterval(function () {
+        clearInterval(botInterval);
 
-    return {
-        verb: moveObjs.verb,
-        target: target.username,
-        restOfMessage: moveObjs.restOfMessage.join(),
-        playerwhite: moveObjs.playerwhite,
-        playerblack: moveObjs.playerblack,
-        timeout: moveObjs.timeout
-    };
+        try {
+
+            // Initialize Discord Bot
+            bot = new Discord.Client();
+            bot.login(auth.token);
+
+            bot.on('ready', function () {
+                logger.info('Connected');
+                logger.info('Logged in as: ');
+                logger.info(bot.username + ' - (' + bot.id + ')');
+
+                bot.guilds.forEach(function (f) { repo.dbMakeDb(f.id); console.log('!ready:', f.id);});
+            });
+
+            bot.on('messageReactionAdd', function (reaction, user) {
+                if (user.id === bot.user.id) {
+                    return;
+                }
+                if (reaction.message.author.id !== bot.user.id) {
+                    return;
+                }
+
+                const guildid = reaction.message.channel.guild.id;
+                const userid = user.id;
+                const channelid = reaction.message.channel.id;
+                
+                console.log('messageReactionAdd', guildid);
+
+                const authorKeys = repo.dbGetGameKeysForUser(guildid, userid, channelid);
+                if (authorKeys.length === 0) {
+
+                    return;
+                }
+
+                const authorGame = repo.dbGetGame(guildid, authorKeys);
+                const isTarget = authorGame[0].targetid === userid;
+                const isWhite = (!isTarget && authorGame[0].isWhite) || !authorGame[0].isWhite;
+
+                const reactionEmojiName = reaction.emoji.name;
+                const isAcceptance = reactionEmojiName == EMOJI_ACCEPT_GAME;
+                const isRejection = reactionEmojiName == EMOJI_REJECT_GAME;
+
+                if (isTarget && authorGame[0].state == NS_INVITED && (isAcceptance || isRejection)) {
+                    reactGameInvite(guildid, reaction.message.channel, userid, authorGame[0].authorid, isAcceptance, !authorGame[0].isWhite)
+                        .catch(console.log);
+                        return;
+                }
+
+                const isauthnext = isAuthorNext(guildid, authorGame[0].authorid, authorGame[0].targetid, channelid);
+                const ourGoNext = (
+                    (authorGame[0].authorid === userid && isauthnext) || 
+                    (authorGame[0].targetid === userid && !isauthnext)
+                );                
+
+                if (!ourGoNext) {
+                    return
+                }
+
+                if (authorGame[0].state === NS_ACCEPTED) {
+                    const reactorGame = repo.dbGetForUserKey(guildid, userid, channelid)[0];
+                    const haveSelection =  typeof reactorGame.data !== 'undefined';// OBTW selected items means theres a thing in the data array TLDR
+    
+                    // if game is in flow and we're dealing with selected pieces
+                    var isProcessed = false;
+                    switch (reactionEmojiName) {
+                        case EMOJI_SHOW_LETTERS:
+                            const letters = haveSelection
+                                ? getLettersNumbersForValidMoves(reactorGame.data.join(''), authorGame[0], isWhite)[0]
+                                : emoji_navigation_letters;
+                                               
+                            addEmojiArray(guildid, reaction.message, emoji_navigation_letters, (t) => letters.includes(t))
+                                //.then(t => addEmojiArray(guildid, reaction.message, [ EMOJI_SHOW_NUMBERS ]))
+                                .catch(console.log);
+
+                            isProcessed = true;
+                            break;
+
+                        case EMOJI_SHOW_NUMBERS:
+                            const numbers = haveSelection 
+                                ? getLettersNumbersForValidMoves(reactorGame.data.join(''), authorGame[0], isWhite)[1]
+                                : emoji_navigation_numbers;
+
+                            addEmojiArray(guildid, reaction.message, emoji_navigation_numbers, (t) => numbers.includes(t) )
+                                .catch(console.log);
+                            isProcessed = true;
+                            break;
+
+                        case EMOJI_CLEARSELECTION:
+                            repo.dbUpdateForUser(guildid, userid, channelid, { data: [] });
+                            const passGame = repo.dbGetForUserKey(guildid, reactorGame.authorid, channelid)[0];
+                            showBoard(guildid, reaction.message.channel, passGame, emoji_board_toolkit, null);
+                            isProcessed = true;
+                            break;
+
+                    }
+                    if (isProcessed) {
+                        return;
+                    }
+                }
+
+                if (emoji_navigation_numbers.includes(reactionEmojiName) ) {
+                    processVerb(guildid, reaction.message, channelid, userid, repo.dbGetGameKeysForUser(guildid, userid, channelid), {
+                        verb: 'data',
+                        infoThing: (emoji_navigation_numbers.indexOf(reactionEmojiName)+1).toString(),
+                        userid: userid
+
+                    });
+                    return;
+                } else if (emoji_navigation_letters.includes(reactionEmojiName) ) {
+                    processVerb(guildid, reaction.message, channelid, userid, repo.dbGetGameKeysForUser(guildid, userid, channelid), {
+                        verb: 'data',
+                        infoThing: letters[emoji_navigation_letters.indexOf(reactionEmojiName)],
+                        userid: userid
+                    });
+                    return;
+                }
+
+            });
+
+            bot.on('message', function (message) {
+                if (message.author.id === bot.user.id)
+                    return;
+
+                const botMentions = message.mentions.users.filter(m => m.id === bot.user.id).array();
+
+                const guildid = message.channel.guild.id;
+                const messageauthorid = message.author.id;
+                const channelid = message.channel.id;
+
+                var isExpectedPlayer = false;
+
+                // if this function is not applicable then get out of here ASAP, and don't clog up the indenting on your way out
+                if (/*typeof botMentions === 'undefined' || botMentions === null ||*/ botMentions.length === 0) {
+                    const anyGames = repo.dbIsAny(guildid, messageauthorid, channelid);
+                    if (anyGames) {
+                        const quickCheckGames = repo.dbGetGame(guildid, repo.dbGetGameKeysForUser(guildid, messageauthorid, channelid));
+                        const whonext = whoIsNext(guildid, quickCheckGames[0].authorid, quickCheckGames[0].targetid, channelid);
+                        if (whonext.whonextid === messageauthorid) {
+                            isExpectedPlayer = true;
+                        }
+                    }
+                    if (!isExpectedPlayer) {
+                        return;
+                    }
+                }
+
+                const content = message.content;
+
+                console.log(messageauthorid, channelid, content, '<-------- on message');
+
+                const allNonBotMentions
+                    = message.mentions.users
+                        .filter(m => m.id !== bot.user.id && m.id !== messageauthorid).array();
+
+                const gameKeysInThisChannel = repo.dbGetGameKeysForUser(guildid, messageauthorid, channelid);
+
+                const parsedMessage = parser.parseMessage(bot, messageauthorid, channelid, content, allNonBotMentions, gameKeysInThisChannel);
+
+                processVerb(guildid, message, channelid, messageauthorid, gameKeysInThisChannel, parsedMessage);
+
+            });
+        } catch (err) {
+            console.log('err:', err);
+        }
+
+    }, 1000 * 2 /* deep breath, count to two */ );
 }
+startBot();
+
+
+// function makeDebugMoveObj(moveObjs) {
+//     var target = (typeof moveObjs.target !== 'undefined' && moveObjs.target !== null)
+//         ? moveObjs.target
+//         : { username: '' };
+
+//     return {
+//         verb: moveObjs.verb,
+//         target: target.username,
+//         restOfMessage: moveObjs.restOfMessage.join(),
+//         playerwhite: moveObjs.playerwhite,
+//         playerblack: moveObjs.playerblack,
+//         timeout: moveObjs.timeout
+//     };
+// }
 
 
 const static = require('node-static');

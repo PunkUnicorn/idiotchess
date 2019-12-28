@@ -59,6 +59,14 @@ function dbUpdateForGame(guildid, userid, channelid, game) {
     dbGetGuildGame(guildid)([{ key: dbGetGameKeysForUser(guildid, userid, channelid) }] ).update(game);
 }
 
+function dbIsAny(guildid, userid, channelid) {
+    const db = dbGetGuildGame(guildid);
+    return db([
+        { authorid: userid, channelid },
+        { targetid: userid, channelid }])
+        .get().length > 0;
+}
+
 /* gets all game keys where the user is an author or target */
 function dbGetGameKeysForUser(guildid, userid, channelid) {
     const findKey 
@@ -111,6 +119,11 @@ function dbGetGame(guildid, keys) {
     return typeof result === 'undefined'
         ? [[{}]]
         : result;
+}
+
+function dbPresentGames(guildid, template) {
+    const db = dbGetGuildGame(guildid);
+    return db().supplant(template);
 }
 
 function dbGetAll(guildid) {
@@ -221,7 +234,9 @@ module.exports = {
     dbGetGameKeysForUser,
     dbGetGame,
     dbGetForUserKey,
+    dbPresentGames,
     dbGetAll,
+    dbIsAny,
 
     timerAdd,
     timerGet,
