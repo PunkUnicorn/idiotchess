@@ -456,6 +456,43 @@ function isValidPiece(fen, piece) {
 }
 
 
+function showBoardAscii(guildid, channel, existingGame, reactionArray, whonext, whoNextGame, haveSelection, haveData, dataStr) {
+    var ascii = existingGame.chessjs.ascii();
+
+    if (!whoNextGame[0].isWhite) {
+        ascii = ascii
+            .split('')
+            .reverse()
+            .join('');
+
+        var asciia = ascii.split("\n");
+        asciia.shift();
+        ascii = '  ' + asciia
+            .join('\n');
+    }
+
+    const additionalEmoji = [];
+    if (haveSelection) {
+        additionalEmoji.push(EMOJI_INFO);
+    }
+    if (haveData) {
+        additionalEmoji.push(EMOJI_CLEARSELECTION);
+    }
+
+    if (additionalEmoji.length > 0) {
+        return channel
+            .send('```' + ascii + '```' + dataStr + '\n<@' + whonext.whonextid + '> to play... ')
+            .then(sentMessage => addEmojiArray(guildid, sentMessage, additionalEmoji))
+            .then(sentReactionArray => {
+                addEmojiArray(guildid, sentReactionArray[0].message, reactionArray);
+            });
+    } else {
+        return channel
+            .send(dataStr + '\n' + '```' + ascii + '```\n<@' + whonext.whonextid + '> to play... ')
+            .then(sentMessage => addEmojiArray(guildid, sentMessage, reactionArray));
+    }
+}
+
 function showBoard(guildid, channel, existingGame, reactionArray, selected) {
     if (typeof selected === 'undefined') selected = null;
     if (typeof existingGame.chessjs === 'undefined' || existingGame.chessjs === null) return;
@@ -489,41 +526,8 @@ function showBoard(guildid, channel, existingGame, reactionArray, selected) {
         dataStr = question_mark + whoNextGame[0].data.join('') + question_mark + '  is selected.\t\t';
     }
 
-    var ascii = existingGame.chessjs.ascii();
 
-
-    if (!whoNextGame[0].isWhite) {
-        ascii = ascii
-            .split('')
-            .reverse()
-            .join('');
-
-        var asciia = ascii.split("\n");
-        asciia.shift();
-        ascii = '  ' + asciia
-            .join('\n');
-    }
-
-    const additionalEmoji = [];
-    if (haveSelection) {
-        additionalEmoji.push(EMOJI_INFO);
-    }
-    if (haveData) {
-        additionalEmoji.push(EMOJI_CLEARSELECTION);
-    }
-
-    if (additionalEmoji.length > 0) {
-        return channel
-            .send('```' + ascii + '```' + dataStr +'\n<@' + whonext.whonextid + '> to play... ')
-            .then(sentMessage => addEmojiArray(guildid, sentMessage, additionalEmoji))
-                .then(sentReactionArray => {
-                    addEmojiArray(guildid, sentReactionArray[0].message, reactionArray);
-                });
-    } else {
-        return channel
-            .send(dataStr + '\n' + '```' + ascii + '```\n<@' + whonext.whonextid + '> to play... ')
-            .then(sentMessage => addEmojiArray(guildid, sentMessage, reactionArray));
-    }
+    return showBoardAscii(guildid, channel, existingGame, reactionArray, whonext, whoNextGame, haveSelection, haveData, dataStr);
 }
 
 function chessyInfo(guildid, channelid, messageauthorid, gameKeysInThisChannel, infoThing, chessjs, channel) {
@@ -623,6 +627,108 @@ logger.add(new logger.transports.Console, {
 logger.level = 'debug';
 
 var bot = null;
+function processVerbData(guildid, message, channelid, messageauthorid, gameKeysInThisChannel, parsedMessage, existingGame, isExistingGame) {
+    const isMessageAuthorToPLay = isExistingGame
+        ? whoIsNext(guildid, existingGame[0].authorid, existingGame[0].targetid, channelid).whonextid === messageauthorid
+        : false;
+
+    if (isExistingGame && existingGame[0].state === NS_ACCEPTED && isMessageAuthorToPLay) {
+        var boardShow = false;
+
+        const updateMe = repo.dbGetForUserKey(guildid, messageauthorid, channelid);
+
+        if (typeof updateMe[0].data === 'undefined') {
+            updateMe[0].data = [];
+        }
+
+        var cleaned = [];
+        if (parsedMessage.infoThing !== null) {
+            updateMe[0].data.push(parsedMessage.infoThing);
+        }
+
+        if (updateMe[0].data.join('').length <= 1) {
+            cleaned = updateMe[0].data;
+        } else {
+            updateMe[0].data.join('').split('').forEach(function (val, index, array) {
+                if (index == 0) return;
+                if (index === array.length - 1 && index % 2 === 0) {
+                    //odd number, and last one, add to result array or it will get missed since otherwise this function takes chunks of two
+                    cleaned.push(val);
+                }
+                if (index % 2 === 0) return;
+
+                const firstIsNumber = '0123456789'.includes((array[index - 1]).toString());
+                const secondIsNumber = '0123456789'.includes((array[index]).toString());
+
+                const firstIsLetter = letters.includes((array[index - 1]).toString());
+                const secondIsLetter = letters.includes((array[index]).toString());
+
+                // to help emoji reaction piece selection swap round numbers and letters if numbers come first. The engine likes letters first
+                if (firstIsNumber && secondIsLetter) {
+                    cleaned.push(val);
+                    cleaned.push(array[index - 1]);
+                } else if (firstIsLetter && secondIsNumber) {
+                    cleaned.push(array[index - 1]);
+                    cleaned.push(val);
+                } else {
+                    // probably not recognised format, but the chess engine may understand it
+                    cleaned.push(array[index - 1]);
+                    cleaned.push(val);
+                }
+
+            });
+        }
+
+        const readyData = cleaned.join('');
+
+        const saveData = (readyData.length > 0)
+            ? [readyData]
+            : (parsedMessage.infoThing !== null)
+                ? [parsedMessage.infoThing]
+                : [];
+
+        repo.dbUpdateForUser(guildid, messageauthorid, channelid, { data: saveData });
+        existingGame[0].data = saveData;
+
+        const piece = updateMe[0].data.join('');
+
+        //auto move
+        if (isValidMove(existingGame[0].chessjs.fen(), piece)) {
+            parsedMessage.verb = 'move';
+            parsedMessage.restOfMessage = [piece];
+            processVerb(guildid, message, channelid, messageauthorid, gameKeysInThisChannel, parsedMessage);//, existingGame, isExistingGame);
+            return;
+        }
+
+        if (piece.length > 1 && piece.length < 4) {
+            /*
+                 
+                Really needs a from: and to:, separater to data[]
+ 
+            */
+            // If the data is a valid piece, auto move
+            if (isValidPiece(existingGame[0].chessjs.fen(), piece)) {
+                //if (existingGame[0].chessjs.get(piece) !== null) {
+                boardShow = true;
+            }
+
+        } //else if (piece.length > 3) {
+        //    if (new Chess(existingGame[0].chessjs.fen()).move(piece) !== null) {
+        //        parsedMessage.verb = 'move';
+        //        parsedMessage.restOfMessage = [piece];
+        //        processVerb(guildid, message, channelid, messageauthorid, gameKeysInThisChannel, parsedMessage, existingGame, isExistingGame);
+        //        return;
+        //    }
+        //}
+        if (parsedMessage.verb == 'select') {
+            boardShow = true;
+        }
+        if (boardShow) {
+            showBoard(guildid, message.channel, existingGame[0], emoji_board_toolkit, piece)
+                .catch(console.log);
+        }
+    }
+}
 
 function processVerbPlay(guildid, message, channelid, messageauthorid, gameKeysInThisChannel, parsedMessage, existingGame, isExistingGame) {
     if (!isExistingGame) {
@@ -844,6 +950,11 @@ function getEmojiListForBoard(guildid, existingGame, messageauthorid) {
     }
 }
 
+function isValidSettingName(setting_name) {
+    const validNameRegex = /^[a-z]+$/g;
+    return setting_name.match(validNameRegex);
+}
+
 function processVerb(guildid, message, channelid, messageauthorid, gameKeysInThisChannel, parsedMessage) {
     const existingGame = repo.dbGetGame(guildid, gameKeysInThisChannel);
     const isExistingGame = existingGame.length > 0;
@@ -871,9 +982,100 @@ function processVerb(guildid, message, channelid, messageauthorid, gameKeysInThi
             }
             break;
 
+        case 'get':
+            //if (!repo.dbIsAny(guildid, messageauthorid, channelid))
+            //    break;
+
+            const settings = repo.dbGetSettings(guildid, messageauthorid);
+            const ourGettings = settings.length > 0 ? settings[0] : {};
+
+            if (parsedMessage.settingName === null || parsedMessage.settingName.length === 0) {
+                const endMessageParts = [', ' + emoji_speakinghead + '  '];
+                if (Object.keys(ourGettings).length) {
+                    Object.keys(ourGettings).forEach(key => {
+                        endMessageParts.push('\n  - Setting `' + key + '` is:\n```' + ourGettings[key] + '```');
+                    });
+                }
+                tellUser(guildid, channelid, messageauthorid, '\n' + endMessageParts.join('\n'), emoji_speakinghead, message)
+                    .catch(console.log);
+                return;
+            }
+
+            if (ourGettings.hasOwnProperty(parsedMessage.settingName)) {
+                tellUser(guildid, channelid, messageauthorid, ', ' + emoji_speakinghead + '  setting `' + parsedMessage.settingName + '` is:\n```' + ourGettings[parsedMessage.settingName] + '```', emoji_speakinghead, message)
+                    .catch(console.log);
+
+            } else {
+                tellUser(guildid, channelid, messageauthorid, ', ' + emoji_speakinghead +'  setting `' + parsedMessage.settingName + '` unknown.', emoji_speakinghead, message)
+                    .catch(console.log);
+
+            }
+            break;
+
+        case 'set':
+            const setting_name = parsedMessage.settingName;
+            if (!isValidSettingName(setting_name)) {
+                return;
+            }
+            var saveSettingObj = {};
+            switch (parsedMessage.settingName) {
+                case 'board':
+                    if (parsedMessage.settingStuff != null && parsedMessage.settingStuff.length == 1) {
+                        const token = parsedMessage.settingStuff[0].toLowerCase();
+                        switch (token) {
+                            case 'clear':
+                            case 'reset':
+                            case 'default':
+                                // delete their local default one, so the board renders with the default
+                                saveSettingObj[setting_name] = null;
+                                try {
+                                    repo.dbUpdateSetting(guildid, messageauthorid, saveSettingObj)
+                                    tellUser(guildid, channelid, messageauthorid, ', ' + emoji_speakinghead + '  board characters reset to default.', emoji_speakinghead, message)
+                                        .catch(console.log);
+                                    saveSettingObj = {};
+                                } catch (err) {
+                                    tellUser(guildid, channelid, messageauthorid, ', ' + emoji_speakinghead + '  ' + exclamation + ' error saving:\n> '+err, emoji_speakinghead, message)
+                                        .catch(console.log);
+                                }
+                                return;
+
+                            default:
+                                break;
+                        }
+                    } 
+                    break;
+
+                default:
+                    try {
+                        if (setting_name === null) {
+                            throw 'invalid setting';
+                        }
+
+                        saveSettingObj[setting_name] = parsedMessage.settingStuff.join(' ');
+                        if (JSON.stringify(saveSettingObj) !== JSON.stringify(JSON.parse(JSON.stringify(saveSettingObj)))) {
+                            throw 'invalid setting';
+                        }
+
+                        repo.dbUpdateSetting(guildid, messageauthorid, saveSettingObj);
+
+                        tellUser(guildid, channelid, messageauthorid, ', ' + emoji_speakinghead +'  setting `' + setting_name + '` set to:\n```' + saveSettingObj[setting_name] + '```', emoji_speakinghead, message)
+                            .catch(console.log);
+
+                        saveSettingObj = {};
+                    } catch (err) {
+                        tellUser(guildid, channelid, messageauthorid, ', ' + emoji_speakinghead + '  ' + exclamation + ' error saving:\n> ' + err, emoji_speakinghead, message)
+                            .catch(console.log);
+                    }
+                    return;
+            }
+            break;
+
         case 'list':
             switch (parsedMessage.listThing) {
-                case 'game':
+                case 'settings':
+                    tellThemTheListOfSetings(guildid, channelid, messageauthorid, message)
+                        .catch(console.log);
+                    break;
                 case 'games':
                     tellThemTheListOfGames(guildid, channelid, messageauthorid, message)
                         .catch(console.log);
@@ -941,106 +1143,7 @@ function processVerb(guildid, message, channelid, messageauthorid, gameKeysInThi
             //fall through.....
 
         case 'data':
-            const isMessageAuthorToPLay = isExistingGame 
-                ? whoIsNext(guildid, existingGame[0].authorid, existingGame[0].targetid, channelid).whonextid === messageauthorid
-                : false;
-    
-            if (isExistingGame && existingGame[0].state === NS_ACCEPTED && isMessageAuthorToPLay) {
-                var boardShow = false;
-
-                const updateMe = repo.dbGetForUserKey(guildid, messageauthorid, channelid); 
-
-                if (typeof updateMe[0].data === 'undefined') {
-                    updateMe[0].data = [];
-                }
-
-                var cleaned = [];
-                if (parsedMessage.infoThing !== null) {
-                    updateMe[0].data.push(parsedMessage.infoThing);
-                }
-
-                if (updateMe[0].data.join('').length <= 1) {
-                    cleaned = updateMe[0].data;
-                } else {
-                    updateMe[0].data.join('').split('').forEach(function (val, index, array) {
-                        if (index == 0) return;
-                        if (index === array.length - 1 && index % 2 === 0) {
-                            //odd number, and last one, add to result array or it will get missed since otherwise this function takes chunks of two
-                            cleaned.push(val);
-                        }
-                        if (index % 2 === 0) return;
-
-                        const firstIsNumber = '0123456789'.includes((array[index - 1]).toString());
-                        const secondIsNumber = '0123456789'.includes((array[index]).toString());
-
-                        const firstIsLetter = letters.includes((array[index - 1]).toString());
-                        const secondIsLetter = letters.includes((array[index]).toString());
-
-                        // to help emoji reaction piece selection swap round numbers and letters if numbers come first. The engine likes letters first
-                        if (firstIsNumber && secondIsLetter) {
-                            cleaned.push(val);
-                            cleaned.push(array[index - 1]);
-                        } else if (firstIsLetter && secondIsNumber) {
-                            cleaned.push(array[index - 1]);
-                            cleaned.push(val);
-                        } else {
-                            // probably not recognised format, but the chess engine may understand it
-                            cleaned.push(array[index - 1]);
-                            cleaned.push(val);
-                        }
-
-                    });
-                }
-
-                const readyData = cleaned.join('');
-
-                const saveData = (readyData.length > 0)
-                    ? [readyData]
-                    : (parsedMessage.infoThing !== null)
-                        ? [parsedMessage.infoThing]
-                        : [];
-
-                repo.dbUpdateForUser(guildid, messageauthorid, channelid, { data: saveData });
-                existingGame[0].data = saveData;
-
-                const piece = updateMe[0].data.join('');
-
-                //auto move
-                if (isValidMove(existingGame[0].chessjs.fen(), piece)) {
-                    parsedMessage.verb = 'move';
-                    parsedMessage.restOfMessage = [piece];
-                    processVerb(guildid, message, channelid, messageauthorid, gameKeysInThisChannel, parsedMessage);//, existingGame, isExistingGame);
-                    return;
-                }
-
-                if (piece.length > 1 && piece.length < 4) {
-                    /*
-                     
-                        Really needs a from: and to:, separater to data[]
-
-                    */
-                    // If the data is a valid piece, auto move
-                    if (isValidPiece(existingGame[0].chessjs.fen(), piece)) {
-                        //if (existingGame[0].chessjs.get(piece) !== null) {
-                        boardShow = true;
-                    }
-
-                } //else if (piece.length > 3) {
-                //    if (new Chess(existingGame[0].chessjs.fen()).move(piece) !== null) {
-                //        parsedMessage.verb = 'move';
-                //        parsedMessage.restOfMessage = [piece];
-                //        processVerb(guildid, message, channelid, messageauthorid, gameKeysInThisChannel, parsedMessage, existingGame, isExistingGame);
-                //        return;
-                //    }
-                //}
-                if (parsedMessage.verb == 'select') {
-                    boardShow = true;
-                }
-                if (boardShow) {
-                    showBoard(guildid, message.channel, existingGame[0], emoji_board_toolkit, piece)
-                        .catch(console.log);
-                }
-            }
+            processVerbData(guildid, message, channelid, messageauthorid, gameKeysInThisChannel, parsedMessage, existingGame, isExistingGame);
             break;
 
         default:
@@ -1187,10 +1290,13 @@ function startBot() {
                 if (/*typeof botMentions === 'undefined' || botMentions === null ||*/ botMentions.length === 0) {
                     const anyGames = repo.dbIsAny(guildid, messageauthorid, channelid);
                     if (anyGames) {
-                        const quickCheckGames = repo.dbGetGame(guildid, repo.dbGetGameKeysForUser(guildid, messageauthorid, channelid));
-                        const whonext = whoIsNext(guildid, quickCheckGames[0].authorid, quickCheckGames[0].targetid, channelid);
-                        if (whonext.whonextid === messageauthorid) {
-                            isExpectedPlayer = true;
+                        const userWantsAutoReact = repo.dbGetSettingAutoReact(guildid, messageauthorid);
+                        if (userWantsAutoReact) {
+                            const quickCheckGames = repo.dbGetGame(guildid, repo.dbGetGameKeysForUser(guildid, messageauthorid, channelid));
+                            const whonext = whoIsNext(guildid, quickCheckGames[0].authorid, quickCheckGames[0].targetid, channelid);
+                            if (whonext.whonextid === messageauthorid) {
+                                isExpectedPlayer = true;
+                            }
                         }
                     }
                     if (!isExpectedPlayer) {
@@ -1210,6 +1316,7 @@ function startBot() {
 
                 const parsedMessage = parser.parseMessage(bot, messageauthorid, channelid, content, allNonBotMentions, gameKeysInThisChannel);
 
+                console.log(parsedMessage, '<-------- on message');
                 processVerb(guildid, message, channelid, messageauthorid, gameKeysInThisChannel, parsedMessage);
 
             });

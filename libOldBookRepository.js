@@ -188,6 +188,101 @@ function timerGetAll() {
     return timerMap.values();
 }
 
+
+
+const fs = require('fs');
+const settingsMap = new Map();
+
+function hasSettingsOnDisk(guildid, userid) {
+    try {
+        const fn = '../' + guildid + '_' + userid + '.settings';
+        return fs.existsSync(fn);
+    } catch (err) {
+        return false;
+    }
+}
+
+function loadSettingsFromDisk(guildid, userid) {
+    try {
+        const fn = '../' + guildid + '_' + userid + '.settings';
+        if (fs.existsSync(fn)) {
+            const content = fs.readFileSync(fn);
+            console.log('loadSettingsFromDisk', content);
+
+            return JSON.parse(content);
+        }
+        else
+            return {};
+
+    } catch (err) {
+        return { loadSettingsFromDiskError: err };
+    }
+}
+
+function saveSettingsToDisk(guildid, userid, settingsObj) {
+    console.log('saveSettingsToDisk', settingsObj);
+    const fn = '../' + guildid + '_' + userid + '.settings';
+    fs.writeFileSync(fn, JSON.stringify(settingsObj));
+    const testObj = loadSettingsFromDisk(guildid, userid);
+    if (typeof testObj.loadSettingsFromDiskError !== 'undefined')
+        throw testObj.loadSettingsFromDiskError;
+
+    Object.keys(testObj)
+        .concat(Object.keys(settingsObj))
+        .forEach(key => {
+            if (testObj[key] !== settingsObj[key])
+                throw key + ' not saved!';
+        });    
+}
+
+function dbMakeSettingsDb(guildid, userid) {
+    settings = loadSettingsFromDisk(guildid, userid);
+    return settingsMap.set(userid, TAFFY(settings));
+}
+
+function dbGetUserSettings(guildid, userid) {
+    if (typeof guildid === 'undefined') throw 'no guildid';
+    if (typeof userid === 'undefined') throw 'no userid';
+    if (!settingsMap.has(userid)) {
+        dbMakeSettingsDb(guildid, userid);
+    }
+    return settingsMap.get(userid);
+}
+
+function dbGetSettings(guildid, userid) {
+    const db = dbGetUserSettings(guildid, userid);
+    console.log('dbGetSettings', db().get());
+    return db().get();
+}
+
+function dbUpdateSetting(guildid, userid, saveSettingObj) {
+    const db = dbGetUserSettings(guildid, userid);
+    db().update(saveSettingObj);
+    saveSettingsToDisk(guildid, userid, db().first());
+}
+
+const DEFAULT_AUTOREACT = false;
+
+function dbGetSettingAutoReact(guildid, userid) {
+    if (!settingsMap.has(userid)) {
+        if (hasSettingsOnDisk(guildid, userid)) {
+            dbMakeSettingsDb(guildid, userid);
+        } else {
+            console.log('dbGetSettingAutoReact', 'not has ======');
+            return DEFAULT_AUTOREACT;
+        }
+    }
+    const first = (dbGetUserSettings(guildid, userid))().first();
+    console.log('first        ', first);
+    if (typeof first.autoreact === 'undefined') {
+        return DEFAULT_AUTOREACT;
+    }
+    console.log('dbGetSettingAutoReact', first, first.autoreact.toString(), JSON.parse(first.autoreact.toString().toLowerCase()));
+    if (first.length > 5) return false; //quick check before a JSON.parse
+    return JSON.parse(first.autoreact.toString().toLowerCase());
+}
+
+
 function pretty(data) {
     return JSON.parse(data().stringify());
 }
@@ -242,6 +337,10 @@ module.exports = {
     timerGet,
     timerClear,
     timerGetAll,
+
+    dbGetSettings, //(guildid, messageauthorid);
+    dbUpdateSetting, //(guildid, messageauthorid, saveSettingObj);
+    dbGetSettingAutoReact,
 
     runTests    
 };

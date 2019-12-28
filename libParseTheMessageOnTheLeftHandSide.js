@@ -26,10 +26,19 @@ function parseMessage(bot, messageuserid, channelid, content, allNonBotMentions,
     /* info mode */
     var infoThing = null;
 
+    /* fen mode */
+    var fenStuff = null;
+
+    /* setting mode */
+    var settingStuff = [];
+    var settingName = null;
+
+    var isSettingMode = false;
     var isTakeBack = false;
     var isTimeout = false;
     var isListMode = false;
     var isInfoMode = false;
+    var isFenMode = false;
 
     var isWhite = true;
 
@@ -55,7 +64,16 @@ function parseMessage(bot, messageuserid, channelid, content, allNonBotMentions,
         do  {
             var retry = false;
 
-            if (isInfoMode) {
+            if (isSettingMode) {
+                if (settingName === null) {
+                    settingName = cleantoken;
+                    settingStuff = [];
+                } else {
+                    settingStuff.push(token);
+                }
+            } else if (isFenMode) {
+                fenStuff.push(token);
+            } else if (isInfoMode) {
                 if (cleantoken === 'clear' || cleantoken === 'reset') {
                     cleantoken = null; //clears the selection
                 }
@@ -78,6 +96,16 @@ function parseMessage(bot, messageuserid, channelid, content, allNonBotMentions,
                     case 't': cleantoken = 'timeout'; retry = true; break;
                     case 'b': cleantoken = 'board'; retry = true; break;
                     case 'm': cleantoken = 'move'; retry = true; break;
+
+                    case 'get':
+                        isSettingMode = true;
+                        verb = cleantoken;
+                        break;
+
+                    case 'set':
+                        isSettingMode = true;
+                        verb = cleantoken;
+                        break;
 
                     case 'data':
                         isInfoMode = true;
@@ -102,15 +130,10 @@ function parseMessage(bot, messageuserid, channelid, content, allNonBotMentions,
                         verb = cleantoken;
                         break;
 
-                    case 'timeout':
-                        isTimeout = true;
-                        break;
-
                     case 'board':
                     case 'move':
                     case 'resign':
                     case 'draw':
-                    case 'change':
                     case 'take':
                         verb = cleantoken;
                         break;
@@ -129,6 +152,15 @@ function parseMessage(bot, messageuserid, channelid, content, allNonBotMentions,
 
                     case 'play':
                         verb = cleantoken;
+                        break;
+
+                    case 'timeout':
+                        isTimeout = true;
+                        break;
+
+                    case 'fen':
+                        isFenMode = true;
+                        fenStuff = [];
                         break;
 
                     case 'quit':
@@ -188,13 +220,18 @@ function parseMessage(bot, messageuserid, channelid, content, allNonBotMentions,
         /* play */
         isWhite,
         timeout, /* how many minuets to wait for the game challenge to be accepted */
+        fenStuff, /* fen to load for game */
 
         /* list */
         listThing, /* word after the word 'list' */
 
         /* info */
         infoThing, /* word after the word 'info' */
-        
+
+        /* setting */
+        settingName,
+        settingStuff,
+
         error
     };
 }
