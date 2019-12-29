@@ -1265,6 +1265,7 @@ function getEmojiListForBoard(guildid, existingGame, messageauthorid) {
 
 function isValidSettingName(setting_name) {
     const validNameRegex = /^[a-z]+$/g;
+    if (typeof setting_name === 'undefined' || setting_name === null || setting_name.length === 0) return false;
     return setting_name.match(validNameRegex);
 }
 
