@@ -284,6 +284,26 @@ function dbUpdateSetting(guildid, userid, saveSettingObj) {
 :regional_indicator_e: |
 
 */
+
+//function toUTF16(codePoint) {
+//    var TEN_BITS = parseInt('1111111111', 2);
+//    function u(codeUnit) {
+//        return '\\u' + codeUnit.toString(16).toUpperCase();
+//    }
+
+//    if (codePoint <= 0xFFFF) {
+//        return u(codePoint);
+//    }
+//    codePoint -= 0x10000;
+
+//    // Shift right to get to most significant 10 bits
+//    var leadingSurrogate = 0xD800 | (codePoint >> 10);
+
+//    // Mask to get least significant 10 bits
+//    var trailingSurrogate = 0xDC00 | (codePoint & TEN_BITS);
+
+//    return u(leadingSurrogate) + u(trailingSurrogate);
+//}
 const DEFAULT_AUTOREACT = false;
 const DEFAULT_EMOJI_SET = {
     '1default1': {
@@ -311,23 +331,23 @@ const DEFAULT_EMOJI_SET = {
         Q: '😳',
         K: '🧐',
         P: '😶',
-        white: '⬜',
+        white: '⬜',//'⬜',▫️
         black: '⬛',
-        keya: '🇦',
-        keyb: '🇧',
-        keyc: '🇨',
-        keyd: '🇩',
-        keye: '🇪',
-        keyf: '🇫',
-        keyg: '🇬',
-        keyh: '🇭',
+        keya: '🇦',//\uFEFF\ud83c\udde6',//' 🇦' \uD83C\uDDE6 //https://graphemica.com/%F0%9F%87%A6  \ud83c\udde6\u000a
+        keyb: '🇧',//\uFEFF\uD83C\uDDE7',//.//🇧', //UTF-16/UTF-16BE (hex)	0xD83C 0xDDE7 (d83cdde7)
+        keyc: '🇨', //\uFEFF\uD83C\uDDE8',//' 🇨',
+        keyd: '🇩', //\uFEFF\uD83C\uDDE9',//' 🇩',
+        keye: '🇪', //\uFEFF\uD83C\uDDEA',//' 🇪',
+        keyf: '🇫',//\uFEFF\uD83C\uDDEB',//' 🇫',   THIS!!! https://onlineutf8tools.com/convert-utf8-to-utf16    
+        keyg: '🇬',//\uFEFF\uD83C\uDDEC',//' 🇬',
+        keyh: '🇭',//\uFEFF\uD83C\uDDED',//' 🇭',
         key1: '1️⃣',
         key2: '2️⃣',
         key3: '3️⃣',
-        key4: '4️⃣',
+        key4: '4️⃣',              //https://en.wikipedia.org/wiki/Byte_order_mark
         key5: '5️⃣',
         key6: '6️⃣',
-        key7: '7️⃣',
+        key7: '7️⃣', //<:emoji:000000000000000000>
         key8: '8️⃣',
         wallplus: '➕',//+
         wallvert: '▪️',

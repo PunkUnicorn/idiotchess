@@ -469,36 +469,35 @@ function showBoardAscii(guildid, requesterid, channel, existingGame, reactionArr
         isFlipped = true;
     }
 
-    if (isFlipped) {
-        ascii = ascii
-            .split('')
-            .reverse()
-            .join('');
-        console.log(ascii);
-
-        var asciia = ascii.split("\n");
-        asciia.shift();
-        ascii = '  ' + asciia
-            .join('\n');
-        console.log(ascii);
-    }
-
-
-
-    const boardType = 'ascii'; 
+  
+    const boardType = 'default1'; 
 
     switch (boardType) {
         case 'default1':
         case 'default2':
         case 'default3':
-            board = augmentAsciiBoard(guildid, requesterid, ascii, isFlipped);
+            board = makeEmojiBoard(guildid, requesterid, existingGame.chessjs, isFlipped);
+            //board = augmentAsciiBoard(guildid, requesterid, ascii, isFlipped);
             break;
 
         case 'ascii':
         case '':
         default:
+            if (isFlipped) {
+                ascii = ascii
+                    .split('')
+                    .reverse()
+                    .join('');
+                console.log(ascii);
+
+                var asciia = ascii.split("\n");
+                asciia.shift();
+                ascii = '  ' + asciia
+                    .join('\n');
+                console.log(ascii);
+            }
             board = '```' + ascii + '```';
-            break
+          break
     }
 
 
@@ -537,10 +536,82 @@ function showBoardAscii(guildid, requesterid, channel, existingGame, reactionArr
             .then(sentMessage => addEmojiArray(guildid, sentMessage, reactionArray));
     }
 }
+
 if (typeof String.prototype.replaceAll === 'undefined') {
     String.prototype.replaceAll = function (replaceThis, withThis) {
         return this.split(replaceThis).join(withThis);
     }
+}
+
+function makeEmojiBoard(guildid, userid, chessjs, isFlipped) {
+    const boardName = repo.dbGetSettingDeckType(guildid, userid);
+    const board = repo.dbGetCustomDeck(guildid, userid)[boardName];
+
+    const result = [];
+    const spaceUnicode = '.           ';////'　';//unicode character (different to normal space)
+    //const spaceUnicode2 = '.   ';////'　';//unicode character (different to normal space)
+    const spaceUnicode3 = '.     ';////'　';//unicode character (different to normal space)
+
+    //const musicalbassclef = "" + (0xD834) + (0xDD1E); 
+    //result.push(musicalbassclef);
+
+
+    result.push(spaceUnicode3);
+    result.push(board.wallplus);
+    for (var i = 0; i < 8; i++) { result.push(board.wallhorz); }
+    result.push(board.wallplus);
+    result.push('\n');
+
+    const keys = [board.key1, board.key2, board.key3, board.key4, board.key5, board.key6, board.key7, board.key8];
+    var rowNo = 8;
+    var yStagger = false;
+    console.log('board', chessjs.board());
+    for (var rowIndex = 7; rowIndex >= 0; rowIndex--) {
+        result.push('\uFEFF' + keys[rowIndex]);
+        result.push('\uFEFF' + board.wallvert);
+        
+        for (var colIndex = 0; colIndex < 8; colIndex++) {
+            const thisSquare = (colIndex === 0 || colIndex % 2 === 0)
+                ? yStagger ? board.white : board.black
+                : yStagger ? board.black : board.white;
+
+            const piece = chessjs.get(letters[colIndex] + rowNo.toString());
+            if (piece === null) {
+                result.push('\uFEFF' + thisSquare);
+            } else {
+                console.log('piece  man', colIndex, rowNo.toString(), piece, piece.color === 'w' ? piece.type.toUpperCase() : piece.type);
+                result.push('\uFEFF' + board[piece.color === 'w' ? piece.type.toUpperCase() : piece.type]); //{ type: 'p', color: 'b' }
+            }
+        }
+
+        result.push('\uFEFF' + board.wallvert);
+        result.push('\n');
+        rowNo--;
+        yStagger = !yStagger;
+    }
+
+    result.push(spaceUnicode3);
+    result.push('\uFEFF' + board.wallplus);
+
+    for (var i = 0; i < 8; i++) {
+        result.push('\uFEFF' + board.wallhorz);
+    }
+    result.push('\uFEFF' + board.wallplus);
+    result.push('\n');
+
+    //return result.join('');
+
+    const letterKeys = [board.keya, board.keyb, board.keyc, board.keyd, board.keye, board.keyf, board.keyg, board.keyh];
+
+    console.log('letterKeys', letterKeys, letterKeys.length);
+    result.push(spaceUnicode);
+    //const lettersTogether = board.keya + board.keyb + board.keyc + board.keyd + board.keye + board.keyf + board.keyg + board.keyh;
+    for (var li = 0; li < 8; li++) {
+        result.push('\uFEFF' + letterKeys[li]);
+    }
+    result.push(/*lettersTogether + */'\n');
+
+    return result.join('');
 }
 
 function augmentAsciiBoard(guildid, userid, ascii, isFlipped) {
