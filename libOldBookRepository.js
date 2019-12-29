@@ -260,8 +260,88 @@ function dbUpdateSetting(guildid, userid, saveSettingObj) {
     db().update(saveSettingObj);
     saveSettingsToDisk(guildid, userid, db().first());
 }
+/**
+:regional_indicator_a: |  :mountain_railway: :unicorn: :innocent: :flushed: :face_with_monocle: :innocent: :unicorn: :mountain_railway:
+:regional_indicator_b: |  :no_mouth: :no_mouth: :no_mouth: :no_mouth: :no_mouth: :no_mouth: :no_mouth: :no_mouth:
+:regional_indicator_c: |
+:regional_indicator_d: |
+:regional_indicator_e: |
 
+
+:woman_in_lotus_position: :man_in_lotus_position:
+
+:regional_indicator_a: |  :snowboarder: :horse_racing: :person_golfing: :reminder_ribbon: :rosette: :horse_racing: :person_golfing: :snowboarder:
+:regional_indicator_b: |  :people_wrestling: :people_wrestling: :people_wrestling: :people_wrestling: :people_wrestling: :people_wrestling: :people_wrestling: :people_wrestling:
+:regional_indicator_c: |
+:regional_indicator_d: |
+:regional_indicator_e: |
+
+
+:regional_indicator_a: |  :bus: :scooter: :airplane: :statue_of_liberty:  :moyai: :airplane: :scooter: :bus:
+:regional_indicator_b: |  :blue_car: :blue_car: :blue_car: :blue_car: :blue_car: :blue_car: :blue_car: :blue_car:
+:regional_indicator_c: |
+:regional_indicator_d: |
+:regional_indicator_e: |
+
+*/
 const DEFAULT_AUTOREACT = false;
+const DEFAULT_EMOJI_SET = {
+    '1default1': {
+        /*********************************
+       +------------------------+
+     8 | r  n  b  q  k  b  n  r |
+     7 | p  p  p  p  p  p  p  p |
+     6 | .  .  .  .  .  .  .  . |
+     5 | .  .  .  .  .  .  .  . |
+     4 | .  .  .  .  .  .  .  . |
+     3 | .  .  .  .  .  .  .  . |
+     2 | P  P  P  P  P  P  P  P |
+     1 | R  N  B  Q  K  B  N  R |
+       +--- --- --- --- --- --- --- ---+
+         a  b  c  d  e  f  g  h*/
+        r: '🚌',
+        n: '🛴',
+        b: '✈️',
+        q: '🗽',
+        k: '🗿',
+        p: '🚙',
+        R: '🚞',
+        N: '🦄',
+        B: '😇',
+        Q: '😳',
+        K: '🧐',
+        P: '😶',
+        white: '⬜',
+        black: '⬛',
+        keya: '🇦',
+        keyb: '🇧',
+        keyc: '🇨',
+        keyd: '🇩',
+        keye: '🇪',
+        keyf: '🇫',
+        keyg: '🇬',
+        keyh: '🇭',
+        key1: '1️⃣',
+        key2: '2️⃣',
+        key3: '3️⃣',
+        key4: '4️⃣',
+        key5: '5️⃣',
+        key6: '6️⃣',
+        key7: '7️⃣',
+        key8: '8️⃣',
+        wallplus: '➕',//+
+        wallvert: '▪️',
+        wallhorz: '▪️'
+    }
+};
+
+function dbGetSettingDeckType(guildid, userid) {
+    return '1default1';
+}
+
+function dbGetCustomDeck(guildid, userid) {
+    return DEFAULT_EMOJI_SET;
+}
 
 function dbGetSettingAutoReact(guildid, userid) {
     if (!settingsMap.has(userid)) {
@@ -341,6 +421,9 @@ module.exports = {
     dbGetSettings, //(guildid, messageauthorid);
     dbUpdateSetting, //(guildid, messageauthorid, saveSettingObj);
     dbGetSettingAutoReact,
+    dbGetSettingDeckType,
+    dbGetCustomDeck,
+
 
     runTests    
 };

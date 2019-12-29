@@ -456,20 +456,64 @@ function isValidPiece(fen, piece) {
 }
 
 
-function showBoardAscii(guildid, channel, existingGame, reactionArray, whonext, whoNextGame, haveSelection, haveData, dataStr) {
-    var ascii = existingGame.chessjs.ascii();
+function showBoardAscii(guildid, requesterid, channel, existingGame, reactionArray, whonext, whoNextGame, haveSelection, haveData, dataStr) {
+    if (requesterid === null) {
+        requesterid = whonext.whonextid;
+    }
 
+    var isFlipped = false;
+    var board = '';
+    var ascii = existingGame.chessjs.ascii();
+    console.log(ascii);
     if (!whoNextGame[0].isWhite) {
+        isFlipped = true;
+    }
+
+    if (isFlipped) {
         ascii = ascii
             .split('')
             .reverse()
             .join('');
+        console.log(ascii);
 
         var asciia = ascii.split("\n");
         asciia.shift();
         ascii = '  ' + asciia
             .join('\n');
+        console.log(ascii);
     }
+
+
+
+    const boardType = 'ascii'; 
+
+    switch (boardType) {
+        case 'default1':
+        case 'default2':
+        case 'default3':
+            board = augmentAsciiBoard(guildid, requesterid, ascii, isFlipped);
+            break;
+
+        case 'ascii':
+        case '':
+        default:
+            board = '```' + ascii + '```';
+            break
+    }
+
+
+
+    //if (!whoNextGame[0].isWhite) {
+    //    board = board
+    //        .split('')
+    //        .reverse()
+    //        .join('');
+
+    //    var asciia = board.split("\n");
+    //    asciia.shift();
+    //    board = '  ' + asciia
+    //        .join('\n');
+    //}
 
     const additionalEmoji = [];
     if (haveSelection) {
@@ -481,19 +525,146 @@ function showBoardAscii(guildid, channel, existingGame, reactionArray, whonext, 
 
     if (additionalEmoji.length > 0) {
         return channel
-            .send('```' + ascii + '```' + dataStr + '\n<@' + whonext.whonextid + '> to play... ')
+            //.send(board + '\n')
+            .send(board + dataStr + '\n<@' + whonext.whonextid + '> to play... ')
             .then(sentMessage => addEmojiArray(guildid, sentMessage, additionalEmoji))
             .then(sentReactionArray => {
                 addEmojiArray(guildid, sentReactionArray[0].message, reactionArray);
             });
     } else {
         return channel
-            .send(dataStr + '\n' + '```' + ascii + '```\n<@' + whonext.whonextid + '> to play... ')
+            .send(board + dataStr +'\n<@' + whonext.whonextid + '> to play... ')
             .then(sentMessage => addEmojiArray(guildid, sentMessage, reactionArray));
     }
 }
+if (typeof String.prototype.replaceAll === 'undefined') {
+    String.prototype.replaceAll = function (replaceThis, withThis) {
+        return this.split(replaceThis).join(withThis);
+    }
+}
 
-function showBoard(guildid, channel, existingGame, reactionArray, selected) {
+function augmentAsciiBoard(guildid, userid, ascii, isFlipped) {
+    const boardName = repo.dbGetSettingDeckType(guildid, userid);
+    const board = repo.dbGetCustomDeck(guildid, userid)[boardName];
+
+    const asciiTransform1 = ascii.split('a');  
+    console.log('asciiTransform1 ', asciiTransform1 );
+    const asciiTransform2a = asciiTransform1[isFlipped ? 1 : 0 ]
+        .replaceAll("n", board.n)
+        .replaceAll("b", board.b)
+        .replaceAll("r", board.r)
+        .replaceAll("k", board.k)
+        .replaceAll("q", board.q)
+        .replaceAll("p", board.p)
+        .replaceAll("N", board.N)
+        .replaceAll("B", board.B)
+        .replaceAll("R", board.R)
+        .replaceAll("K", board.K)
+        .replaceAll("Q", board.Q)
+        .replaceAll("P", board.P);
+
+
+    const asciiTransform2bsource = asciiTransform2a
+        .split('8');
+
+    const splitIt = asciiTransform2bsource[isFlipped ? 0 : 1].split('\n');
+    const afterSplitItAll = [];
+    var yStagger = false;
+    console.log(ascii);
+    for (var i = 0; i < splitIt.length; i++) {
+        //var anyData = false;
+        const afterSplitIt = [];
+        const firstDotTestIndexOffset = 2 + (yStagger ? 1 : 0);
+        var startIndex = splitIt[i].indexOf('|') + firstDotTestIndexOffset; //<-- thankfully these characters are still ascii
+
+        var newLine = splitIt[i].substring(0, startIndex);
+        console.log('bewLine', newLine);
+        afterSplitIt.push(newLine);
+
+
+        var x = 0;
+        for (const symbol of splitIt[i]) { //the only way to iterate through unencoded symbols, rather than char's
+
+            console.log(symbol);
+            const isTestIndexTime = x === 0 || x % 2 == 0;
+            if (isTestIndexTime && symbol[startIndex + x] === '.') {
+                afterSplitIt.push(board.white);
+            } else {
+                afterSplitIt.push(symbol);
+            }
+
+
+            x++;
+        }
+
+
+        //////console.log('splitIt', startIndex, splitIt[i].length);
+        ////for (var x = 0; startIndex + x < splitIt[i].length; x++) {
+        ////    const isTestIndexTime = x === 0 || x % 2 == 0;
+        ////    //console.log('row ', startIndex ,x, splitIt[i][startIndex + x]);
+        ////    if (isTestIndexTime && splitIt[i][startIndex + x] === '.') {
+        ////        afterSplitIt.push(board.white);
+        ////    } else {
+        ////        afterSplitIt.push(splitIt[i][startIndex + x]);
+        ////    }
+        ////    //anyData = true;
+        ////}
+        yStagger = !yStagger;
+
+        //if (anyData)
+        //    afterSplitIt.push('\n');
+        afterSplitItAll.push(afterSplitIt.join(''));
+        //console.log('afterSplitIt1', afterSplitIt.join(''));
+        //console.log('afterSplitIt2', splitIt.join('\n'));
+    }
+    
+    //const asciiTransform2b1 = splitIt.join('\n')
+    //    .replaceAll('---', board.wallhorz)
+    //    .replaceAll('|', board.wallvert)
+    //    .replaceAll('+', board.wallplus)
+    //    .replaceAll('.', board.black);
+
+    const asciiTransform2bOrNot2b
+        = isFlipped
+            ? [afterSplitItAll.join('\n'), asciiTransform2bsource[isFlipped ? 1 : 0]]
+                .join(board.key8)
+                + '          '
+            : [asciiTransform2bsource[isFlipped ? 1 : 0], afterSplitItAll.join('\n')]
+                .join(board.key8)
+                + '          ';
+
+    //for (i = asciiTransform2a.split('\n')
+    const asciiTransform2c = asciiTransform1[isFlipped ? 0 : 1]
+        //.replaceAll('     ', '  -  ')//leave one text character per line to scale down the emojis
+        .replaceAll('b', board.keyb)
+        .replaceAll('c', board.keyc)
+        .replaceAll('d', board.keyd)
+        .replaceAll('e', board.keye)
+        .replaceAll('f', board.keyf)
+        .replaceAll('g', board.keyg)
+        .replaceAll('h', board.keyh);
+
+    const asciiTransform3
+        = (isFlipped ? [asciiTransform2c, asciiTransform2bOrNot2b] : [asciiTransform2bOrNot2b, asciiTransform2c])
+            .join(board.keya)
+            .replaceAll('---', board.wallhorz)
+            .replaceAll('|', board.wallvert)
+            .replaceAll('+', board.wallplus)
+            .replaceAll('.', board.black)
+            .replaceAll('1', board.key1)
+            .replaceAll('2', board.key2)
+            .replaceAll('3', board.key3)
+            .replaceAll('4', board.key4)
+            .replaceAll('5', board.key5)
+            .replaceAll('6', board.key6)
+            .replaceAll('7', board.key7);
+
+    return asciiTransform3;
+    //dbGetSettingDeckType,
+    //    dbGetCustomDeck,
+}
+
+function showBoard(guildid, requesterid, channel, existingGame, reactionArray, selected) {
     if (typeof selected === 'undefined') selected = null;
     if (typeof existingGame.chessjs === 'undefined' || existingGame.chessjs === null) return;
 
@@ -527,7 +698,7 @@ function showBoard(guildid, channel, existingGame, reactionArray, selected) {
     }
 
 
-    return showBoardAscii(guildid, channel, existingGame, reactionArray, whonext, whoNextGame, haveSelection, haveData, dataStr);
+    return showBoardAscii(guildid, requesterid, channel, existingGame, reactionArray, whonext, whoNextGame, haveSelection, haveData, dataStr);
 }
 
 function chessyInfo(guildid, channelid, messageauthorid, gameKeysInThisChannel, infoThing, chessjs, channel) {
@@ -557,7 +728,7 @@ function reactGameInvite(guildid, channel, userid, authorid, isAcceptance, isWhi
         const game = repo.dbGetForUserKey(guildid, authorid, channelid);
 
         return channel.send("It's ON! ")
-            .then(t => showBoard(guildid, channel, game[0], emoji_board_toolkit));
+            .then(t => showBoard(guildid, authorid, channel, game[0], emoji_board_toolkit));
 
     } else {
         return tellUserOfCancel(guildid, channelid, userid, { deleteIt: true });        
@@ -724,7 +895,7 @@ function processVerbData(guildid, message, channelid, messageauthorid, gameKeysI
             boardShow = true;
         }
         if (boardShow) {
-            showBoard(guildid, message.channel, existingGame[0], emoji_board_toolkit, piece)
+            showBoard(guildid, messageauthorid, message.channel, existingGame[0], emoji_board_toolkit, piece)
                 .catch(console.log);
         }
     }
@@ -864,12 +1035,12 @@ function movePieceBoyakasha(guildid, channelid, userid, existingGame, cleanedMov
         }
 
         return tellUser(guildid, channelid, userid, ', sorry unable to move ' + move + extraInfo + exclamation, exclamation, message)
-            .then(t => showBoard(guildid, message.channel, repo.dbGetForUserKey(guildid, existingGame.authorid, channelid)[0], emoji_board_toolkit));
+            .then(t => showBoard(guildid, userid, message.channel, repo.dbGetForUserKey(guildid, existingGame.authorid, channelid)[0], emoji_board_toolkit));
     }
 
     repo.dbUpdateForUser(guildid, existingGame.authorid, channelid, { chessjs });
     repo.dbUpdateForGame(guildid, existingGame.authorid, channelid, { data:[] });
-    return showBoard(guildid, message.channel, repo.dbGetForUserKey(guildid, existingGame.authorid, channelid)[0], emoji_board_toolkit);
+    return showBoard(guildid, null, message.channel, repo.dbGetForUserKey(guildid, existingGame.authorid, channelid)[0], emoji_board_toolkit);
 }
 
 function getLettersNumbersForValidMoves(piece, existingGame, isWhite) {
@@ -1106,7 +1277,7 @@ function processVerb(guildid, message, channelid, messageauthorid, gameKeysInThi
                 /////////////////showInfo(guildid, message.channel, messageauthorsgame, messageauthorid, infoThing);
 
 
-                showBoard(guildid, message.channel, messageauthorsgame, emoji_board_toolkit)
+                showBoard(guildid, messageauthorid, message.channel, messageauthorsgame, emoji_board_toolkit)
                     .catch(console.log);
                 //chessyInfo(guildid, channelid, messageauthorid, gameKeysInThisChannel, parsedMessage.infoThing, existingGame[0].chessjs, message.channel)
                 //    .catch(console.log);
@@ -1115,7 +1286,7 @@ function processVerb(guildid, message, channelid, messageauthorid, gameKeysInThi
 
         case 'board':
             if (isExistingGame) {
-                showBoard(guildid, message.channel, existingGame[0], emoji_board_toolkit)
+                showBoard(guildid, messageauthorid, message.channel, existingGame[0], emoji_board_toolkit)
                     .catch(console.log);
             }
             break;
@@ -1245,7 +1416,7 @@ function startBot() {
                         case EMOJI_CLEARSELECTION:
                             repo.dbUpdateForUser(guildid, userid, channelid, { data: [] });
                             const passGame = repo.dbGetForUserKey(guildid, reactorGame.authorid, channelid)[0];
-                            showBoard(guildid, reaction.message.channel, passGame, emoji_board_toolkit, null);
+                            showBoard(guildid, userid, reaction.message.channel, passGame, emoji_board_toolkit, null);
                             isProcessed = true;
                             break;
 
