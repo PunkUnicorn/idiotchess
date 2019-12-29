@@ -267,6 +267,11 @@ function tellChannel(guildid, channelid, speak, optionalemoji, optionalchannel) 
         });
 }
 
+
+
+
+var esrever = require('esrever');
+
 const emoji_numbers = '🔢';
 const emoji_a = '🇦';
 const emoji_b = '🇧';
@@ -469,14 +474,14 @@ function showBoardAscii(guildid, requesterid, channel, existingGame, reactionArr
         isFlipped = true;
     }
 
-  
-    const boardType = 'default1'; 
 
-    switch (boardType) {
-        case 'default1':
-        case 'default2':
-        case 'default3':
-            board = makeEmojiBoard(guildid, requesterid, existingGame.chessjs, isFlipped);
+    const boardName = repo.dbGetSettingDeckType(guildid, requesterid); //boardtype
+    
+    switch (boardName) {
+        case '1default1':
+        case '1default2':
+        case '1default3':
+            board = makeEmojiBoard(guildid, requesterid, existingGame.chessjs, isFlipped, boardName);
             //board = augmentAsciiBoard(guildid, requesterid, ascii, isFlipped);
             break;
 
@@ -543,197 +548,263 @@ if (typeof String.prototype.replaceAll === 'undefined') {
     }
 }
 
-function makeEmojiBoard(guildid, userid, chessjs, isFlipped) {
-    const boardName = repo.dbGetSettingDeckType(guildid, userid);
-    const board = repo.dbGetCustomDeck(guildid, userid)[boardName];
+function makeEmojiBoard(guildid, userid, chessjs, isFlipped, boardName) {
+    const board = repo.dbGetCustomDeck(guildid, userid, boardName);
 
     const result = [];
-    const spaceUnicode = '.           ';////'　';//unicode character (different to normal space)
+    const spaceUnicode = '            ';////'　';//unicode character (different to normal space)
     //const spaceUnicode2 = '.   ';////'　';//unicode character (different to normal space)
-    const spaceUnicode3 = '.     ';////'　';//unicode character (different to normal space)
+    const spaceUnicode3 = '      ';////'　';//unicode character (different to normal space)
 
     //const musicalbassclef = "" + (0xD834) + (0xDD1E); 
     //result.push(musicalbassclef);
 
-
-    result.push(spaceUnicode3);
+    if (!isFlipped) {
+        result.push(spaceUnicode3);
+    }
     result.push(board.wallplus);
-    for (var i = 0; i < 8; i++) { result.push(board.wallhorz); }
+    //if (isFlipped) {
+    //    for (var i = 7; i >= 0; i--) { result.push(board.wallhorz); }
+    //} else {
+        for (var i = 0; i < 8; i++) { result.push(board.wallhorz); }
+    //}
     result.push(board.wallplus);
     result.push('\n');
 
     const keys = [board.key1, board.key2, board.key3, board.key4, board.key5, board.key6, board.key7, board.key8];
-    var rowNo = 8;
+    var rowNo = isFlipped ? 1 : 8;
     var yStagger = false;
     console.log('board', chessjs.board());
-    for (var rowIndex = 7; rowIndex >= 0; rowIndex--) {
-        result.push('\uFEFF' + keys[rowIndex]);
-        result.push('\uFEFF' + board.wallvert);
-        
-        for (var colIndex = 0; colIndex < 8; colIndex++) {
+
+    function loopThing(rowIndex, isFlipped) {
+        if (!isFlipped) {
+            result.push(keys[rowIndex]);
+        }
+        result.push(board.wallvert);
+
+        const start = isFlipped ? 0 : 7;
+        const end = isFlipped ? 7 : 0;
+        const step = isFlipped ? 1 : -1;
+        for (var colIndex = start; true; colIndex += step) {
+            if (isFlipped
+                ? colIndex > end
+                : colIndex < end)
+                    break;
+
             const thisSquare = (colIndex === 0 || colIndex % 2 === 0)
                 ? yStagger ? board.white : board.black
                 : yStagger ? board.black : board.white;
 
             const piece = chessjs.get(letters[colIndex] + rowNo.toString());
             if (piece === null) {
-                result.push('\uFEFF' + thisSquare);
+                result.push(thisSquare);
             } else {
                 console.log('piece  man', colIndex, rowNo.toString(), piece, piece.color === 'w' ? piece.type.toUpperCase() : piece.type);
-                result.push('\uFEFF' + board[piece.color === 'w' ? piece.type.toUpperCase() : piece.type]); //{ type: 'p', color: 'b' }
+                result.push(board[piece.color === 'w' ? piece.type.toUpperCase() : piece.type]); //{ type: 'p', color: 'b' }
             }
         }
 
-        result.push('\uFEFF' + board.wallvert);
+        result.push(board.wallvert );
+
+        if (isFlipped) {
+            //result.push('**' + rowIndex.toString() + '**' + '\uFEFF');//+ keys[rowIndex]); <- cant get the unicode to render :(
+            result.push(keys[rowIndex]); 
+        }
+
         result.push('\n');
-        rowNo--;
+        rowNo += isFlipped ? 1 : -1;
         yStagger = !yStagger;
     }
 
-    result.push(spaceUnicode3);
-    result.push('\uFEFF' + board.wallplus);
+    if (isFlipped) {
+        for (var rowIndex = 0; rowIndex < 8; rowIndex++)
+            loopThing(rowIndex, isFlipped);
 
-    for (var i = 0; i < 8; i++) {
-        result.push('\uFEFF' + board.wallhorz);
+    } else {
+        for (var rowIndex = 7; rowIndex >= 0; rowIndex--)
+            loopThing(rowIndex, isFlipped);
     }
-    result.push('\uFEFF' + board.wallplus);
-    result.push('\n');
+
+    if (!isFlipped) {
+        result.push(spaceUnicode3);
+    }
+    result.push( board.wallplus);
+
+//    if (isFlipped) {
+  //      for (var i = 7; i >= 0; i--) {
+    //        result.push(board.wallhorz);
+   //     }
+   // } else {
+        for (var i = 0; i < 8; i++) {
+            result.push(board.wallhorz);
+        }
+    //}
+    result.push( board.wallplus);
+    result.push('\n' );
 
     //return result.join('');
 
     const letterKeys = [board.keya, board.keyb, board.keyc, board.keyd, board.keye, board.keyf, board.keyg, board.keyh];
 
     console.log('letterKeys', letterKeys, letterKeys.length);
-    result.push(spaceUnicode);
+    if (!isFlipped) {
+        result.push(spaceUnicode);
+    } else {
+        result.push(board.black);
+    }
     //const lettersTogether = board.keya + board.keyb + board.keyc + board.keyd + board.keye + board.keyf + board.keyg + board.keyh;
-    for (var li = 0; li < 8; li++) {
-        result.push('\uFEFF' + letterKeys[li]);
-    }
-    result.push(/*lettersTogether + */'\n');
-
-    return result.join('');
-}
-
-function augmentAsciiBoard(guildid, userid, ascii, isFlipped) {
-    const boardName = repo.dbGetSettingDeckType(guildid, userid);
-    const board = repo.dbGetCustomDeck(guildid, userid)[boardName];
-
-    const asciiTransform1 = ascii.split('a');  
-    console.log('asciiTransform1 ', asciiTransform1 );
-    const asciiTransform2a = asciiTransform1[isFlipped ? 1 : 0 ]
-        .replaceAll("n", board.n)
-        .replaceAll("b", board.b)
-        .replaceAll("r", board.r)
-        .replaceAll("k", board.k)
-        .replaceAll("q", board.q)
-        .replaceAll("p", board.p)
-        .replaceAll("N", board.N)
-        .replaceAll("B", board.B)
-        .replaceAll("R", board.R)
-        .replaceAll("K", board.K)
-        .replaceAll("Q", board.Q)
-        .replaceAll("P", board.P);
-
-
-    const asciiTransform2bsource = asciiTransform2a
-        .split('8');
-
-    const splitIt = asciiTransform2bsource[isFlipped ? 0 : 1].split('\n');
-    const afterSplitItAll = [];
-    var yStagger = false;
-    console.log(ascii);
-    for (var i = 0; i < splitIt.length; i++) {
-        //var anyData = false;
-        const afterSplitIt = [];
-        const firstDotTestIndexOffset = 2 + (yStagger ? 1 : 0);
-        var startIndex = splitIt[i].indexOf('|') + firstDotTestIndexOffset; //<-- thankfully these characters are still ascii
-
-        var newLine = splitIt[i].substring(0, startIndex);
-        console.log('bewLine', newLine);
-        afterSplitIt.push(newLine);
-
-
-        var x = 0;
-        for (const symbol of splitIt[i]) { //the only way to iterate through unencoded symbols, rather than char's
-
-            console.log(symbol);
-            const isTestIndexTime = x === 0 || x % 2 == 0;
-            if (isTestIndexTime && symbol[startIndex + x] === '.') {
-                afterSplitIt.push(board.white);
-            } else {
-                afterSplitIt.push(symbol);
-            }
-
-
-            x++;
+    if (!isFlipped) {
+        for (var li = 0; li < 8; li++) {
+            result.push('\uFEFF' + letterKeys[li]);
         }
-
-
-        //////console.log('splitIt', startIndex, splitIt[i].length);
-        ////for (var x = 0; startIndex + x < splitIt[i].length; x++) {
-        ////    const isTestIndexTime = x === 0 || x % 2 == 0;
-        ////    //console.log('row ', startIndex ,x, splitIt[i][startIndex + x]);
-        ////    if (isTestIndexTime && splitIt[i][startIndex + x] === '.') {
-        ////        afterSplitIt.push(board.white);
-        ////    } else {
-        ////        afterSplitIt.push(splitIt[i][startIndex + x]);
-        ////    }
-        ////    //anyData = true;
-        ////}
-        yStagger = !yStagger;
-
-        //if (anyData)
-        //    afterSplitIt.push('\n');
-        afterSplitItAll.push(afterSplitIt.join(''));
-        //console.log('afterSplitIt1', afterSplitIt.join(''));
-        //console.log('afterSplitIt2', splitIt.join('\n'));
+    } else {
+        for (var li = 7; li >= 0; li--) {
+            if (li % 3 == 0) {
+                result.push(' ');
+            }
+            result.push(' **' + letters[li].toUpperCase() + '**  ' );
+        }
     }
-    
-    //const asciiTransform2b1 = splitIt.join('\n')
-    //    .replaceAll('---', board.wallhorz)
-    //    .replaceAll('|', board.wallvert)
-    //    .replaceAll('+', board.wallplus)
-    //    .replaceAll('.', board.black);
+    result.push(/*lettersTogether + */ '\n');
+    //result.push(' \n' + '\uFEFF'); //different scale for emojis when outputted with plain text
 
-    const asciiTransform2bOrNot2b
-        = isFlipped
-            ? [afterSplitItAll.join('\n'), asciiTransform2bsource[isFlipped ? 1 : 0]]
-                .join(board.key8)
-                + '          '
-            : [asciiTransform2bsource[isFlipped ? 1 : 0], afterSplitItAll.join('\n')]
-                .join(board.key8)
-                + '          ';
 
-    //for (i = asciiTransform2a.split('\n')
-    const asciiTransform2c = asciiTransform1[isFlipped ? 0 : 1]
-        //.replaceAll('     ', '  -  ')//leave one text character per line to scale down the emojis
-        .replaceAll('b', board.keyb)
-        .replaceAll('c', board.keyc)
-        .replaceAll('d', board.keyd)
-        .replaceAll('e', board.keye)
-        .replaceAll('f', board.keyf)
-        .replaceAll('g', board.keyg)
-        .replaceAll('h', board.keyh);
 
-    const asciiTransform3
-        = (isFlipped ? [asciiTransform2c, asciiTransform2bOrNot2b] : [asciiTransform2bOrNot2b, asciiTransform2c])
-            .join(board.keya)
-            .replaceAll('---', board.wallhorz)
-            .replaceAll('|', board.wallvert)
-            .replaceAll('+', board.wallplus)
-            .replaceAll('.', board.black)
-            .replaceAll('1', board.key1)
-            .replaceAll('2', board.key2)
-            .replaceAll('3', board.key3)
-            .replaceAll('4', board.key4)
-            .replaceAll('5', board.key5)
-            .replaceAll('6', board.key6)
-            .replaceAll('7', board.key7);
+    if (isFlipped) {
+        return /*var ascii =*/ '\uFEFF' + result.join('\uFEFF');
+        //ascii = ascii
+        //    .split('');
+        return '\uFEFF' + spaceUnicode3 + esrever.reverse(ascii);
+        //    .join('');
+        console.log(ascii);
 
-    return asciiTransform3;
-    //dbGetSettingDeckType,
-    //    dbGetCustomDeck,
+
+        //esrever.reverse(input);
+    } else {
+        return '\uFEFF' + result.join('');
+    }
 }
+
+//function augmentAsciiBoard(guildid, userid, ascii, isFlipped) {
+//    const boardName = repo.dbGetSettingDeckType(guildid, userid);
+//    const board = repo.dbGetCustomDeck(guildid, userid)[boardName];
+
+//    const asciiTransform1 = ascii.split('a');  
+//    console.log('asciiTransform1 ', asciiTransform1 );
+//    const asciiTransform2a = asciiTransform1[isFlipped ? 1 : 0 ]
+//        .replaceAll("n", board.n)
+//        .replaceAll("b", board.b)
+//        .replaceAll("r", board.r)
+//        .replaceAll("k", board.k)
+//        .replaceAll("q", board.q)
+//        .replaceAll("p", board.p)
+//        .replaceAll("N", board.N)
+//        .replaceAll("B", board.B)
+//        .replaceAll("R", board.R)
+//        .replaceAll("K", board.K)
+//        .replaceAll("Q", board.Q)
+//        .replaceAll("P", board.P);
+
+
+//    const asciiTransform2bsource = asciiTransform2a
+//        .split('8');
+
+//    const splitIt = asciiTransform2bsource[isFlipped ? 0 : 1].split('\n');
+//    const afterSplitItAll = [];
+//    var yStagger = false;
+//    console.log(ascii);
+//    for (var i = 0; i < splitIt.length; i++) {
+//        //var anyData = false;
+//        const afterSplitIt = [];
+//        const firstDotTestIndexOffset = 2 + (yStagger ? 1 : 0);
+//        var startIndex = splitIt[i].indexOf('|') + firstDotTestIndexOffset; //<-- thankfully these characters are still ascii
+
+//        var newLine = splitIt[i].substring(0, startIndex);
+//        console.log('bewLine', newLine);
+//        afterSplitIt.push(newLine);
+
+
+//        var x = 0;
+//        for (const symbol of splitIt[i]) { //the only way to iterate through unencoded symbols, rather than char's
+
+//            console.log(symbol);
+//            const isTestIndexTime = x === 0 || x % 2 == 0;
+//            if (isTestIndexTime && symbol[startIndex + x] === '.') {
+//                afterSplitIt.push(board.white);
+//            } else {
+//                afterSplitIt.push(symbol);
+//            }
+
+
+//            x++;
+//        }
+
+
+//        //////console.log('splitIt', startIndex, splitIt[i].length);
+//        ////for (var x = 0; startIndex + x < splitIt[i].length; x++) {
+//        ////    const isTestIndexTime = x === 0 || x % 2 == 0;
+//        ////    //console.log('row ', startIndex ,x, splitIt[i][startIndex + x]);
+//        ////    if (isTestIndexTime && splitIt[i][startIndex + x] === '.') {
+//        ////        afterSplitIt.push(board.white);
+//        ////    } else {
+//        ////        afterSplitIt.push(splitIt[i][startIndex + x]);
+//        ////    }
+//        ////    //anyData = true;
+//        ////}
+//        yStagger = !yStagger;
+
+//        //if (anyData)
+//        //    afterSplitIt.push('\n');
+//        afterSplitItAll.push(afterSplitIt.join(''));
+//        //console.log('afterSplitIt1', afterSplitIt.join(''));
+//        //console.log('afterSplitIt2', splitIt.join('\n'));
+//    }
+    
+//    //const asciiTransform2b1 = splitIt.join('\n')
+//    //    .replaceAll('---', board.wallhorz)
+//    //    .replaceAll('|', board.wallvert)
+//    //    .replaceAll('+', board.wallplus)
+//    //    .replaceAll('.', board.black);
+
+//    const asciiTransform2bOrNot2b
+//        = isFlipped
+//            ? [afterSplitItAll.join('\n'), asciiTransform2bsource[isFlipped ? 1 : 0]]
+//                .join(board.key8)
+//                + '          '
+//            : [asciiTransform2bsource[isFlipped ? 1 : 0], afterSplitItAll.join('\n')]
+//                .join(board.key8)
+//                + '          ';
+
+//    //for (i = asciiTransform2a.split('\n')
+//    const asciiTransform2c = asciiTransform1[isFlipped ? 0 : 1]
+//        //.replaceAll('     ', '  -  ')//leave one text character per line to scale down the emojis
+//        .replaceAll('b', board.keyb)
+//        .replaceAll('c', board.keyc)
+//        .replaceAll('d', board.keyd)
+//        .replaceAll('e', board.keye)
+//        .replaceAll('f', board.keyf)
+//        .replaceAll('g', board.keyg)
+//        .replaceAll('h', board.keyh);
+
+//    const asciiTransform3
+//        = (isFlipped ? [asciiTransform2c, asciiTransform2bOrNot2b] : [asciiTransform2bOrNot2b, asciiTransform2c])
+//            .join(board.keya)
+//            .replaceAll('---', board.wallhorz)
+//            .replaceAll('|', board.wallvert)
+//            .replaceAll('+', board.wallplus)
+//            .replaceAll('.', board.black)
+//            .replaceAll('1', board.key1)
+//            .replaceAll('2', board.key2)
+//            .replaceAll('3', board.key3)
+//            .replaceAll('4', board.key4)
+//            .replaceAll('5', board.key5)
+//            .replaceAll('6', board.key6)
+//            .replaceAll('7', board.key7);
+
+//    return asciiTransform3;
+//    //dbGetSettingDeckType,
+//    //    dbGetCustomDeck,
+//}
 
 function showBoard(guildid, requesterid, channel, existingGame, reactionArray, selected) {
     if (typeof selected === 'undefined') selected = null;
@@ -1232,9 +1303,10 @@ function processVerb(guildid, message, channelid, messageauthorid, gameKeysInThi
             const ourGettings = settings.length > 0 ? settings[0] : {};
 
             if (parsedMessage.settingName === null || parsedMessage.settingName.length === 0) {
-                const endMessageParts = [', ' + emoji_speakinghead + '  '];
+                const endMessageParts = ['\n' + emoji_speakinghead + '  '];
                 if (Object.keys(ourGettings).length) {
                     Object.keys(ourGettings).forEach(key => {
+                        if (!isValidSettingName(key)) return;
                         endMessageParts.push('\n  - Setting `' + key + '` is:\n```' + ourGettings[key] + '```');
                     });
                 }
@@ -1244,11 +1316,11 @@ function processVerb(guildid, message, channelid, messageauthorid, gameKeysInThi
             }
 
             if (ourGettings.hasOwnProperty(parsedMessage.settingName)) {
-                tellUser(guildid, channelid, messageauthorid, ', ' + emoji_speakinghead + '  setting `' + parsedMessage.settingName + '` is:\n```' + ourGettings[parsedMessage.settingName] + '```', emoji_speakinghead, message)
+                tellUser(guildid, channelid, messageauthorid, '\n' + emoji_speakinghead + '  setting `' + parsedMessage.settingName + '` is:\n```' + ourGettings[parsedMessage.settingName] + '```', emoji_speakinghead, message)
                     .catch(console.log);
 
             } else {
-                tellUser(guildid, channelid, messageauthorid, ', ' + emoji_speakinghead +'  setting `' + parsedMessage.settingName + '` unknown.', emoji_speakinghead, message)
+                tellUser(guildid, channelid, messageauthorid, '\n' + emoji_speakinghead +'  setting `' + parsedMessage.settingName + '` unknown.', emoji_speakinghead, message)
                     .catch(console.log);
 
             }
@@ -1272,11 +1344,11 @@ function processVerb(guildid, message, channelid, messageauthorid, gameKeysInThi
                                 saveSettingObj[setting_name] = null;
                                 try {
                                     repo.dbUpdateSetting(guildid, messageauthorid, saveSettingObj)
-                                    tellUser(guildid, channelid, messageauthorid, ', ' + emoji_speakinghead + '  board characters reset to default.', emoji_speakinghead, message)
+                                    tellUser(guildid, channelid, messageauthorid, '\n' + emoji_speakinghead + '  board characters reset to default.', emoji_speakinghead, message)
                                         .catch(console.log);
                                     saveSettingObj = {};
                                 } catch (err) {
-                                    tellUser(guildid, channelid, messageauthorid, ', ' + emoji_speakinghead + '  ' + exclamation + ' error saving:\n> '+err, emoji_speakinghead, message)
+                                    tellUser(guildid, channelid, messageauthorid, '\n' + emoji_speakinghead + '  ' + exclamation + ' error saving:\n> '+err, emoji_speakinghead, message)
                                         .catch(console.log);
                                 }
                                 return;
@@ -1300,12 +1372,12 @@ function processVerb(guildid, message, channelid, messageauthorid, gameKeysInThi
 
                         repo.dbUpdateSetting(guildid, messageauthorid, saveSettingObj);
 
-                        tellUser(guildid, channelid, messageauthorid, ', ' + emoji_speakinghead +'  setting `' + setting_name + '` set to:\n```' + saveSettingObj[setting_name] + '```', emoji_speakinghead, message)
+                        tellUser(guildid, channelid, messageauthorid, '\n' + emoji_speakinghead +'  setting `' + setting_name + '` set to:\n```' + saveSettingObj[setting_name] + '```', emoji_speakinghead, message)
                             .catch(console.log);
 
                         saveSettingObj = {};
                     } catch (err) {
-                        tellUser(guildid, channelid, messageauthorid, ', ' + emoji_speakinghead + '  ' + exclamation + ' error saving:\n> ' + err, emoji_speakinghead, message)
+                        tellUser(guildid, channelid, messageauthorid, '\n' + emoji_speakinghead + '  ' + exclamation + ' error saving:\n> ' + err, emoji_speakinghead, message)
                             .catch(console.log);
                     }
                     return;

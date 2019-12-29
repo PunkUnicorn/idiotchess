@@ -355,12 +355,28 @@ const DEFAULT_EMOJI_SET = {
     }
 };
 
+const DEFAULT_DECKTYPE = '1default1';
+
+// boardtype
 function dbGetSettingDeckType(guildid, userid) {
-    return '1default1';
+    if (!settingsMap.has(userid)) {
+        if (hasSettingsOnDisk(guildid, userid)) {
+            dbMakeSettingsDb(guildid, userid);
+        } else {
+            console.log('dbGetSettingDeckType', 'not has ======');
+            return DEFAULT_DECKTYPE;
+        }
+    }
+    const first = (dbGetUserSettings(guildid, userid))().first();
+
+    if (typeof first.boardtype === 'undefined') {
+        return DEFAULT_DECKTYPE;
+    }
+    return first.boardtype;
 }
 
-function dbGetCustomDeck(guildid, userid) {
-    return DEFAULT_EMOJI_SET;
+function dbGetCustomDeck(guildid, userid, boardName) {
+    return DEFAULT_EMOJI_SET[boardName];
 }
 
 function dbGetSettingAutoReact(guildid, userid) {
