@@ -363,7 +363,7 @@ function dbGetSettingDeckType(guildid, userid) {
         if (hasSettingsOnDisk(guildid, userid)) {
             dbMakeSettingsDb(guildid, userid);
         } else {
-            console.log('dbGetSettingDeckType', 'not has ======');
+            //console.log('dbGetSettingDeckType', 'not has ======');
             return DEFAULT_DECKTYPE;
         }
     }
@@ -376,7 +376,27 @@ function dbGetSettingDeckType(guildid, userid) {
 }
 
 function dbGetCustomDeck(guildid, userid, boardName) {
-    return DEFAULT_EMOJI_SET[boardName];
+    if (!settingsMap.has(userid)) {
+        if (hasSettingsOnDisk(guildid, userid)) {
+            dbMakeSettingsDb(guildid, userid);
+        } else {
+            console.log('dbGetCustomDeck', 'not has ======');
+            return DEFAULT_EMOJI_SET['1default1'];
+        }
+    }
+
+    const first = (dbGetUserSettings(guildid, userid))().first();
+    try {
+        if (first.hasOwnProperty(boardName)) {
+            //console.log('first[boardName]', first, first[boardName], first[boardName].toString());
+            //const cloneFood = { ...first[boardName] };
+            //console.log(first.customb, cloneFood);
+            return first[boardName];
+        }
+    } catch (err) {
+        console.log('dbGetCustomDeck', err);
+    }
+    return DEFAULT_EMOJI_SET['1default1'];
 }
 
 function dbGetSettingAutoReact(guildid, userid) {
@@ -389,11 +409,11 @@ function dbGetSettingAutoReact(guildid, userid) {
         }
     }
     const first = (dbGetUserSettings(guildid, userid))().first();
-    console.log('first        ', first);
+    //console.log('first        ', first);
     if (typeof first.autoreact === 'undefined') {
         return DEFAULT_AUTOREACT;
     }
-    console.log('dbGetSettingAutoReact', first, first.autoreact.toString(), JSON.parse(first.autoreact.toString().toLowerCase()));
+    //console.log('dbGetSettingAutoReact', first, first.autoreact.toString(), JSON.parse(first.autoreact.toString().toLowerCase()));
     if (first.length > 5) return false; //quick check before a JSON.parse
     return JSON.parse(first.autoreact.toString().toLowerCase());
 }

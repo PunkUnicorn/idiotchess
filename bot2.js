@@ -469,37 +469,37 @@ function showBoardAscii(guildid, requesterid, channel, existingGame, reactionArr
     var isFlipped = false;
     var board = '';
     var ascii = existingGame.chessjs.ascii();
-    console.log(ascii);
+    //console.log(ascii);
     if (!whoNextGame[0].isWhite) {
         isFlipped = true;
     }
 
 
     const boardName = repo.dbGetSettingDeckType(guildid, requesterid); //boardtype
-    
+    //console.log('showBoardAscii boardName', boardName);
     switch (boardName) {
         case '1default1':
         case '1default2':
         case '1default3':
+        default:
             board = makeEmojiBoard(guildid, requesterid, existingGame.chessjs, isFlipped, boardName);
             //board = augmentAsciiBoard(guildid, requesterid, ascii, isFlipped);
             break;
 
         case 'ascii':
         case '':
-        default:
             if (isFlipped) {
                 ascii = ascii
                     .split('')
                     .reverse()
                     .join('');
-                console.log(ascii);
+                //console.log(ascii);
 
                 var asciia = ascii.split("\n");
                 asciia.shift();
                 ascii = '  ' + asciia
                     .join('\n');
-                console.log(ascii);
+                //console.log(ascii);
             }
             board = '```' + ascii + '```';
           break
@@ -551,6 +551,8 @@ if (typeof String.prototype.replaceAll === 'undefined') {
 function makeEmojiBoard(guildid, userid, chessjs, isFlipped, boardName) {
     const board = repo.dbGetCustomDeck(guildid, userid, boardName);
 
+    //console.log('makeEmojiBoard', board, boardName);
+
     const result = [];
     const spaceUnicode = '            ';////'　';//unicode character (different to normal space)
     //const spaceUnicode2 = '.   ';////'　';//unicode character (different to normal space)
@@ -562,33 +564,44 @@ function makeEmojiBoard(guildid, userid, chessjs, isFlipped, boardName) {
     if (!isFlipped) {
         result.push(spaceUnicode3);
     }
-    result.push(board.wallplus);
+    //console.log('wyut', board, board.wallplus, board['wallplus']);
+    result.push(board['wallplus']);
     //if (isFlipped) {
     //    for (var i = 7; i >= 0; i--) { result.push(board.wallhorz); }
     //} else {
-        for (var i = 0; i < 8; i++) { result.push(board.wallhorz); }
+        for (var i = 0; i < 8; i++) { result.push(board['wallhorz']); }
     //}
-    result.push(board.wallplus);
+    result.push(board['wallplus']);
     result.push('\n');
 
-    const keys = [board.key1, board.key2, board.key3, board.key4, board.key5, board.key6, board.key7, board.key8];
+    const keys = [board['key1'], board['key2'], board['key3'], board['key4'], board['key5'], board['key6'], board['key7'], board['key8']];
     var rowNo = isFlipped ? 1 : 8;
     var yStagger = false;
-    console.log('board', chessjs.board());
+    //console.log('board', chessjs.board());
 
     function loopThing(rowIndex, isFlipped) {
+
+
+
+
+
+        //might need to reverse the board column array
+
+
+
+
         if (!isFlipped) {
             result.push(keys[rowIndex]);
         }
         result.push(board.wallvert);
 
-        const start = isFlipped ? 0 : 7;
-        const end = isFlipped ? 7 : 0;
-        const step = isFlipped ? 1 : -1;
+        const start = isFlipped ? 7 : 0;
+        const end = isFlipped ? 0 : 7;
+        const step = isFlipped ? -1 : 1;
         for (var colIndex = start; true; colIndex += step) {
             if (isFlipped
-                ? colIndex > end
-                : colIndex < end)
+                ? colIndex < end
+                : colIndex > end)
                     break;
 
             const thisSquare = (colIndex === 0 || colIndex % 2 === 0)
@@ -599,7 +612,7 @@ function makeEmojiBoard(guildid, userid, chessjs, isFlipped, boardName) {
             if (piece === null) {
                 result.push(thisSquare);
             } else {
-                console.log('piece  man', colIndex, rowNo.toString(), piece, piece.color === 'w' ? piece.type.toUpperCase() : piece.type);
+                //console.log('piece  man', colIndex, rowNo.toString(), piece, piece.color === 'w' ? piece.type.toUpperCase() : piece.type);
                 result.push(board[piece.color === 'w' ? piece.type.toUpperCase() : piece.type]); //{ type: 'p', color: 'b' }
             }
         }
@@ -615,7 +628,7 @@ function makeEmojiBoard(guildid, userid, chessjs, isFlipped, boardName) {
         rowNo += isFlipped ? 1 : -1;
         yStagger = !yStagger;
     }
-
+    //console.log('result', result);
     if (isFlipped) {
         for (var rowIndex = 0; rowIndex < 8; rowIndex++)
             loopThing(rowIndex, isFlipped);
@@ -646,7 +659,7 @@ function makeEmojiBoard(guildid, userid, chessjs, isFlipped, boardName) {
 
     const letterKeys = [board.keya, board.keyb, board.keyc, board.keyd, board.keye, board.keyf, board.keyg, board.keyh];
 
-    console.log('letterKeys', letterKeys, letterKeys.length);
+    //console.log('letterKeys', letterKeys, letterKeys.length);
     if (!isFlipped) {
         result.push(spaceUnicode);
     } else {
@@ -676,7 +689,7 @@ function makeEmojiBoard(guildid, userid, chessjs, isFlipped, boardName) {
         //    .split('');
         return '\uFEFF' + spaceUnicode3 + esrever.reverse(ascii);
         //    .join('');
-        console.log(ascii);
+        //console.log(ascii);
 
 
         //esrever.reverse(input);
@@ -1367,9 +1380,9 @@ function processVerb(guildid, message, channelid, messageauthorid, gameKeysInThi
                         }
 
                         saveSettingObj[setting_name] = parsedMessage.settingStuff.join(' ');
-                        if (JSON.stringify(saveSettingObj) !== JSON.stringify(JSON.parse(JSON.stringify(saveSettingObj)))) {
-                            throw 'invalid setting';
-                        }
+                        //if (JSON.stringify(saveSettingObj) !== JSON.stringify(JSON.parse(JSON.stringify(saveSettingObj)))) {
+                        //    throw 'invalid setting';
+                        //}
 
                         repo.dbUpdateSetting(guildid, messageauthorid, saveSettingObj);
 
