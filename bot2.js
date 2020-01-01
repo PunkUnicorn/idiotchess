@@ -921,6 +921,7 @@ jgs(______)(_______)(_______)(________)(________)(_________)
 */
 
 const parser = require('./libParseTheMessageOnTheLeftHandSide.js');
+const https = require("https");
 
 
 const love_letter = '\uD83D\uDC8C';// '\u1F48C';
@@ -1310,13 +1311,10 @@ function processVerb(guildid, message, channelid, messageauthorid, gameKeysInThi
             break;
 
         case 'get':
-            //if (!repo.dbIsAny(guildid, messageauthorid, channelid))
-            //    break;
-
             const settings = repo.dbGetSettings(guildid, messageauthorid);
             const ourGettings = settings.length > 0 ? settings[0] : {};
 
-            if (parsedMessage.settingName === null || parsedMessage.settingName.length === 0) {
+            if (typeof parsedMessage.settingName === 'undefined' || parsedMessage.settingName === null || parsedMessage.settingName.length === 0) {
                 const endMessageParts = ['\n' + emoji_speakinghead + '  '];
                 if (Object.keys(ourGettings).length) {
                     Object.keys(ourGettings).forEach(key => {
@@ -1346,55 +1344,200 @@ function processVerb(guildid, message, channelid, messageauthorid, gameKeysInThi
                 return;
             }
             var saveSettingObj = {};
-            switch (parsedMessage.settingName) {
-                case 'board':
-                    if (parsedMessage.settingStuff != null && parsedMessage.settingStuff.length == 1) {
-                        const token = parsedMessage.settingStuff[0].toLowerCase();
-                        switch (token) {
-                            case 'clear':
-                            case 'reset':
-                            case 'default':
-                                // delete their local default one, so the board renders with the default
-                                saveSettingObj[setting_name] = null;
-                                try {
-                                    repo.dbUpdateSetting(guildid, messageauthorid, saveSettingObj)
-                                    tellUser(guildid, channelid, messageauthorid, '\n' + emoji_speakinghead + '  board characters reset to default.', emoji_speakinghead, message)
-                                        .catch(console.log);
-                                    saveSettingObj = {};
-                                } catch (err) {
-                                    tellUser(guildid, channelid, messageauthorid, '\n' + emoji_speakinghead + '  ' + exclamation + ' error saving:\n> '+err, emoji_speakinghead, message)
-                                        .catch(console.log);
-                                }
-                                return;
-
-                            default:
-                                break;
+            if (typeof parsedMessage.settingName !== 'undefined' && parsedMessage.settingStuff != null && parsedMessage.settingStuff.length == 1) {
+                const token = parsedMessage.settingStuff[0].toLowerCase();
+                switch (token) {
+                    case 'clear':
+                    case 'reset':
+                        // delete their local default one, so the board renders with the default
+                        saveSettingObj[setting_name] = null;
+                        try {
+                            repo.dbUpdateSetting(guildid, messageauthorid, saveSettingObj)
+                            tellUser(guildid, channelid, messageauthorid, '\n' + emoji_speakinghead + ' ' + settingName + 'reset.', emoji_speakinghead, message)
+                                .catch(console.log);
+                            saveSettingObj = {};
+                        } catch (err) {
+                            tellUser(guildid, channelid, messageauthorid, '\n' + emoji_speakinghead + '  ' + exclamation + ' error saving:\n> ' + err, emoji_speakinghead, message)
+                                .catch(console.log);
                         }
-                    } 
-                    break;
+                        return;
 
-                default:
-                    try {
-                        if (setting_name === null) {
-                            throw 'invalid setting';
-                        }
+                    default:
+                        break;
+                } /*Scraappy test probably */
+            } else if (typeof parsedMessage.settingName === 'undefined' || typeof parsedMessage.settingName === null || parsedMessage.settingStuff.length == 0) {
+                try {
 
-                        saveSettingObj[setting_name] = parsedMessage.settingStuff.join(' ');
-                        //if (JSON.stringify(saveSettingObj) !== JSON.stringify(JSON.parse(JSON.stringify(saveSettingObj)))) {
-                        //    throw 'invalid setting';
-                        //}
+                    //get the attachment
 
-                        repo.dbUpdateSetting(guildid, messageauthorid, saveSettingObj);
+                    //strip out functions by JSON.parse( JSON.stringify( loaded ) )
 
-                        tellUser(guildid, channelid, messageauthorid, '\n' + emoji_speakinghead +'  setting `' + setting_name + '` set to:\n```' + saveSettingObj[setting_name] + '```', emoji_speakinghead, message)
-                            .catch(console.log);
-
-                        saveSettingObj = {};
-                    } catch (err) {
-                        tellUser(guildid, channelid, messageauthorid, '\n' + emoji_speakinghead + '  ' + exclamation + ' error saving:\n> ' + err, emoji_speakinghead, message)
-                            .catch(console.log);
+                    console.log('message.attachments', message.attachments.first());
+                    const first = message.attachments.first();
+                    if (first == undefined) {
+                        return;
                     }
-                    return;
+                    console.log('first', first);
+                    if (first.filesize > 3000) {
+                        return;
+                    }
+                    // var http = require('http');
+                    // var fs = require('fs');
+
+                    // var download = function (url, dest, cb) {
+                    //     var file = fs.createWriteStream(dest);
+                    //     var request = http.get(url, function (response) {
+                    //         response.pipe(file);
+                    //         file.on('finish', function () {
+                    //             file.close(cb);
+                    //         });
+                    //     });
+                    // }
+
+
+                    
+                    //const file = fs.createWriteStream("data.txt");
+                    function downloads(url, dest, cb)
+                    {
+                        const file = fs.createWriteStream(dest);
+                        https.get(url, response => {
+                            var stream = response.pipe(file);
+                        
+                            
+                            file.on('finish', function () {
+                                file.close(cb);
+                            });
+
+                            stream.on("finish", function() {
+                                console.log("done");
+                            });
+                        });
+                    }
+
+                    //https://github.com/nodejs/node/issues/23033
+
+                    // function GetFileEncodingHeader(filePath) {
+                    //     const readStream = fs.openSync(filePath, 'r');
+                    //     const bufferSize = 2;
+                    //     const buffer = new Buffer(bufferSize);
+                    //     let readBytes = 0;
+                    
+                    //     if (readBytes = fs.readSync(readStream, buffer, 0, bufferSize, 0)) {
+                    //         const header = buffer.slice(0, readBytes).toString("hex");
+                    
+                    //         if (header === "fffe") {
+                    //             return "utf16le";
+                    //         } else if (header === "feff") {
+                    //             return "utf16be";
+                    //         } else if (header.startsWith("ff") || header.startsWith("fe") || header.startsWith("ef")) {
+                    //             return "utf8";
+                    //         }
+                    //     }
+                    
+                    //     return "";
+                    // }
+                    
+                    // function ReadFileSync(filePath, desiredEncoding) {
+                    //     if (!desiredEncoding || desiredEncoding == null || desiredEncoding === "undefined") {
+                    //         return fs.readFileSync(filePath);
+                    //     } else if (desiredEncoding === "binary" || desiredEncoding === "hex") {
+                    //         return fs.readFileSync(filePath, desiredEncoding);
+                    //     }
+                    
+                    //     const fileEncoding = GetFileEncodingHeader(filePath);
+                    //     let fileEncodingBytes = 0;
+                    //     let content = null;
+                    
+                    //     if (desiredEncoding === "ucs2") {
+                    //         desiredEncoding = "utf16le";
+                    //     } else if (desiredEncoding === "ascii") {
+                    //         desiredEncoding = "utf8";
+                    //     }
+                    
+                    //     if (fileEncoding === "utf16le" || fileEncoding === "utf16be") {
+                    //         fileEncodingBytes = 2;
+                    //         content = fs.readFileSync(filePath, "ucs2"); // utf-16 Little Endian
+                    
+                    //         if (desiredEncoding != fileEncoding && desiredEncoding !== "default" &&
+                    //             !(fileEncoding == "utf16le" && desiredEncoding === "utf8")) {
+                    
+                    //             content = content.swap16();
+                    //         }
+                    //     } else {
+                    //         if (fileEncoding === "utf8") {
+                    //             fileEncodingBytes = 1;
+                    //         }
+                    
+                    //         content = fs.readFileSync(filePath, "utf8");
+                    //     }
+                    
+                    //     if (desiredEncoding === "default") {
+                    //         return content; // Per documentation, no encoding means return a raw buffer.
+                    //     }
+                    
+                    //     return content.toString(desiredEncoding, fileEncodingBytes);
+                    // }
+                    
+
+                    // //https://github.com/nodejs/node/issues/23033
+                    // function GetJson(filePath) {
+                    //     const jsonContents = ReadFileSync(filePath, "utf16be");
+                    //     console.log(GetFileEncodingHeader(filePath));
+                    
+                    //     return JSON.parse(jsonContents);
+                    // }
+
+                    try {
+                        const tempfilename = first.id + '.download';
+
+                        downloads(first.url, tempfilename,
+                            function (wut) {
+                            console.log('first.url, tempfilename', first.url, tempfilename);
+                            
+                            //var downloaded = GetJson(tempfilename);
+                            //var downloaded = fs.readFileSync(tempfilename);
+                            var downloaded = new TextDecoder('utf-16le').decode(fs.readFileSync(tempfilename));
+                            var downloaded21 = new TextDecoder('utf-16').decode(fs.readFileSync(tempfilename));
+                            //console.log('downloaded.toString()', downloaded.toString());
+                            //const one = JSON.stringify(downloaded.toString());
+                            //const two = JSON.parse(one);
+                            //const dataObj = two;
+
+                            const updateObj = {};
+                            updateObj[setting_name] = downloaded;
+                            repo.dbUpdateSetting(guildid, messageauthorid, updateObj);
+
+                            tellUser(guildid, channelid, messageauthorid, '\n' + emoji_speakinghead + '  setting `' + setting_name + '` set to:\n```' + updateObj[setting_name] + '```', emoji_speakinghead, message)
+                                .catch(console.log);
+
+                            //fs.unlink(tempfilename);
+                        });
+
+                    } catch (err) {console.log('} catch (err) {', err); }
+                } catch (err) {
+                    tellUser(guildid, channelid, messageauthorid, '\n' + emoji_speakinghead + '  ' + exclamation + ' error saving:\n> ' + err, emoji_speakinghead, message)
+                        .catch(console.log);
+                    
+                    
+                }
+                return;
+            }
+            
+            try {
+                saveSettingObj[setting_name] = parsedMessage.settingStuff.join(' ');
+                //if (JSON.stringify(saveSettingObj) !== JSON.stringify(JSON.parse(JSON.stringify(saveSettingObj)))) {
+                //    throw 'invalid setting';
+                //}
+
+                repo.dbUpdateSetting(guildid, messageauthorid, saveSettingObj);
+
+                tellUser(guildid, channelid, messageauthorid, '\n' + emoji_speakinghead + '  setting `' + setting_name + '` set to:\n```' + saveSettingObj[setting_name] + '```', emoji_speakinghead, message)
+                    .catch(console.log);
+
+                saveSettingObj = {};
+            } catch (err) {
+                tellUser(guildid, channelid, messageauthorid, '\n' + emoji_speakinghead + '  ' + exclamation + ' error saving:\n> ' + err, emoji_speakinghead, message)
+                    .catch(console.log);
             }
             break;
 

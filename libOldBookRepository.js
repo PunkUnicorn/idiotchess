@@ -206,7 +206,8 @@ function loadSettingsFromDisk(guildid, userid) {
     try {
         const fn = '../' + guildid + '_' + userid + '.settings';
         if (fs.existsSync(fn)) {
-            const content = fs.readFileSync(fn);
+
+            const content = new TextDecoder('utf-16').decode(fs.readFileSync(fn));
             console.log('loadSettingsFromDisk', content);
 
             return JSON.parse(content);
@@ -222,14 +223,28 @@ function loadSettingsFromDisk(guildid, userid) {
 function saveSettingsToDisk(guildid, userid, settingsObj) {
     console.log('saveSettingsToDisk', settingsObj);
     const fn = '../' + guildid + '_' + userid + '.settings';
+
+    SAVE EVERYTHING IN UNICODE!!!
+    easier to read it back then
+    
     fs.writeFileSync(fn, JSON.stringify(settingsObj));
     const testObj = loadSettingsFromDisk(guildid, userid);
     if (typeof testObj.loadSettingsFromDiskError !== 'undefined')
         throw testObj.loadSettingsFromDiskError;
 
+    function isValidSettingName(setting_name) {
+        const validNameRegex = /^[a-z]+$/g;
+        if (typeof setting_name === 'undefined' || setting_name === null || setting_name.length === 0) return false;
+        return setting_name.match(validNameRegex);
+    }
+
     Object.keys(testObj)
         .concat(Object.keys(settingsObj))
         .forEach(key => {
+            if (!isValidSettingName(key)) {
+                return;
+            }
+
             if (testObj[key] !== settingsObj[key])
                 throw key + ' not saved!';
         });    
