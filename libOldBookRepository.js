@@ -207,7 +207,7 @@ function loadSettingsFromDisk(guildid, userid) {
         const fn = '../' + guildid + '_' + userid + '.settings';
         if (fs.existsSync(fn)) {
 
-            const content = new TextDecoder('utf-16').decode(fs.readFileSync(fn));
+            const content = new TextDecoder().decode(fs.readFileSync(fn));
             console.log('loadSettingsFromDisk', content);
 
             return JSON.parse(content);
@@ -224,10 +224,11 @@ function saveSettingsToDisk(guildid, userid, settingsObj) {
     console.log('saveSettingsToDisk', settingsObj);
     const fn = '../' + guildid + '_' + userid + '.settings';
 
-    SAVE EVERYTHING IN UNICODE!!!
-    easier to read it back then
-    
-    fs.writeFileSync(fn, JSON.stringify(settingsObj));
+    //SAVE EVERYTHING IN UNICODE!!!
+    //easier to read it back then
+    var encoded = new TextEncoder('utf-16le').encode(JSON.stringify(settingsObj));
+    fs.writeFileSync(fn, encoded);
+
     const testObj = loadSettingsFromDisk(guildid, userid);
     if (typeof testObj.loadSettingsFromDiskError !== 'undefined')
         throw testObj.loadSettingsFromDiskError;
@@ -362,9 +363,9 @@ const DEFAULT_EMOJI_SET = {
         key4: '4️⃣',              //https://en.wikipedia.org/wiki/Byte_order_mark
         key5: '5️⃣',
         key6: '6️⃣',
-        key7: '7️⃣', //<:emoji:000000000000000000>
+        key7: '7️⃣', 
         key8: '8️⃣',
-        wallplus: '➕',//+
+        wallplus: '➕',
         wallvert: '▪️',
         wallhorz: '▪️'
     }
@@ -406,7 +407,36 @@ function dbGetCustomDeck(guildid, userid, boardName) {
             //console.log('first[boardName]', first, first[boardName], first[boardName].toString());
             //const cloneFood = { ...first[boardName] };
             //console.log(first.customb, cloneFood);
-            return first[boardName];
+
+            //var downloaded = new TextDecoder('utf-16le')=.decode(fs.readFileSync(tempfilename));
+
+            const result2 = {};
+            
+            const matches = (first[boardName].toString()).split('\n');
+            for (const match of matches) {
+                const kv = match.split(':');
+                result2[kv[0]] = kv[1];
+                //console.log(match);
+                //console.log(match.index)
+            }
+            return result2;
+            const result = {};
+            const testa = (first[boardName].toString().split(','));
+            testa.forEach(function(value, index, array) {
+                const wut = value.split('"');
+                console.log(wut);
+                if (index == 0) {
+                    result[wut[1]] = wut[2];
+                } else {
+                    result[wut[1]] = wut[3];
+                }
+            });
+
+            // const result = [];
+            // for (const (variable, chara) in first[boardName]) {  
+            //     result.push(variable);
+            // }
+            return result;
         }
     } catch (err) {
         console.log('dbGetCustomDeck', err);

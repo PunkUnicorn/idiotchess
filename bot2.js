@@ -944,6 +944,9 @@ const information = 'ℹ️';
 const EMOJI_ACCEPT_GAME = ok;
 const EMOJI_REJECT_GAME = cross3;
 
+/// UNICODE SPACING SPACES http://jkorpela.fi/chars/spaces.html
+
+
 
 // Configure logger settings
 logger.remove(logger.transports.Console);
@@ -1348,12 +1351,13 @@ function processVerb(guildid, message, channelid, messageauthorid, gameKeysInThi
                 const token = parsedMessage.settingStuff[0].toLowerCase();
                 switch (token) {
                     case 'clear':
+                    case 'null':
                     case 'reset':
                         // delete their local default one, so the board renders with the default
                         saveSettingObj[setting_name] = null;
                         try {
                             repo.dbUpdateSetting(guildid, messageauthorid, saveSettingObj)
-                            tellUser(guildid, channelid, messageauthorid, '\n' + emoji_speakinghead + ' ' + settingName + 'reset.', emoji_speakinghead, message)
+                            tellUser(guildid, channelid, messageauthorid, '\n' + emoji_speakinghead + ' ' + setting_name + ' reset.', emoji_speakinghead, message)
                                 .catch(console.log);
                             saveSettingObj = {};
                         } catch (err) {
@@ -1497,7 +1501,7 @@ function processVerb(guildid, message, channelid, messageauthorid, gameKeysInThi
                             //var downloaded = GetJson(tempfilename);
                             //var downloaded = fs.readFileSync(tempfilename);
                             var downloaded = new TextDecoder('utf-16le').decode(fs.readFileSync(tempfilename));
-                            var downloaded21 = new TextDecoder('utf-16').decode(fs.readFileSync(tempfilename));
+                            //var downloaded21 = new TextDecoder('utf-16').decode(fs.readFileSync(tempfilename));
                             //console.log('downloaded.toString()', downloaded.toString());
                             //const one = JSON.stringify(downloaded.toString());
                             //const two = JSON.parse(one);
