@@ -10,8 +10,8 @@ B:🙏
 Q:👆
 K:👋
 P:👍
-white:⬜
-black:⬛
+white:⬛
+black:⬜
 keya:🇦
 keyb:🇧
 keyc:🇨
@@ -26,8 +26,8 @@ key3:3️⃣
 key4:4️⃣
 key5:5️⃣
 key6:6️⃣
-key7:7️⃣ 
+key7:7️⃣
 key8:8️⃣
 wallplus:➕
-wallvert:+++
-wallhorz:+++
+wallvert:▪
+wallhorz:▪

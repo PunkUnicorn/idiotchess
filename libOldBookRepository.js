@@ -5,6 +5,7 @@ const gamesMap = new Map();
 function dbMakeDb(guildid) {
     return gamesMap.set(guildid, TAFFY());
 }
+
 function dbGetGuildGame(guildid) {
     if (typeof guildid === 'undefined') throw 'no guildid';
     if (!gamesMap.has(guildid)) throw 'unknown guildid ' + guildid;
@@ -190,6 +191,9 @@ function timerGetAll() {
 
 
 
+
+
+
 const fs = require('fs');
 const settingsMap = new Map();
 
@@ -199,6 +203,33 @@ function hasSettingsOnDisk(guildid, userid) {
         return fs.existsSync(fn);
     } catch (err) {
         return false;
+    }
+}
+
+function hasGuildSettingsOnDisk(guildid) {
+    try {
+        const fn = './' + guildid + '.settings';
+        return fs.existsSync(fn);
+    } catch (err) {
+        return false;
+    }
+}
+
+function loadGuildSettingsFromDisk(guildid) {
+    try {
+        const fn = './' + guildid + '.settings';
+        if (fs.existsSync(fn)) {
+
+            const content = new TextDecoder().decode(fs.readFileSync(fn));
+            console.log('loadGuildSettingsFromDisk', content);
+
+            return JSON.parse(content);
+        }
+        else
+            return {};
+
+    } catch (err) {
+        return { loadSettingsFromDiskError: err };
     }
 }
 
@@ -251,9 +282,23 @@ function saveSettingsToDisk(guildid, userid, settingsObj) {
         });    
 }
 
+
+function dbMakeGuildSettingsDb(guildid) {
+    settings = loadGuildSettingsFromDisk(guildid);
+    return settingsMap.set(guildid, TAFFY(settings));
+}
+
 function dbMakeSettingsDb(guildid, userid) {
     settings = loadSettingsFromDisk(guildid, userid);
     return settingsMap.set(userid, TAFFY(settings));
+}
+
+function dbGetGuildSettings(guildid) {
+    if (typeof guildid === 'undefined') throw 'no guildid';
+    if (!settingsMap.has(guildid)) {
+        dbMakeGuildSettingsDb(guildid);
+    }
+    return settingsMap.get(guildid);
 }
 
 function dbGetUserSettings(guildid, userid) {
@@ -373,22 +418,70 @@ const DEFAULT_EMOJI_SET = {
 
 const DEFAULT_DECKTYPE = '1default1';
 
+function getGuildSettingDeckType(guildid, userid, setting_name) {
+    if (!settingsMap.has(guildid)) {
+        if (hasGuildSettingsOnDisk(guildid)) {
+            dbMakeGuildSettingsDb(guildid);
+        } else {
+            //console.log('dbGetSettingDeckType', 'not has ======');
+            return DEFAULT_DECKTYPE;
+        }
+    }
+    const first = (dbGetGuildSettings(guildid))().first();
+
+    if (typeof first.boardtype === 'undefined') {
+        return DEFAULT_DECKTYPE;
+    }
+    return first.boardtype;
+}
+
 // boardtype
 function dbGetSettingDeckType(guildid, userid) {
     if (!settingsMap.has(userid)) {
         if (hasSettingsOnDisk(guildid, userid)) {
             dbMakeSettingsDb(guildid, userid);
         } else {
-            //console.log('dbGetSettingDeckType', 'not has ======');
-            return DEFAULT_DECKTYPE;
+            return getGuildSettingDeckType(guildid);//DEFAULT_DECKTYPE;
         }
     }
     const first = (dbGetUserSettings(guildid, userid))().first();
 
     if (typeof first.boardtype === 'undefined') {
-        return DEFAULT_DECKTYPE;
+        return getGuildSettingDeckType(guildid);//DEFAULT_DECKTYPE;
     }
     return first.boardtype;
+}
+
+function dbGetGuildCustomDeck(guildid, boardName) {
+    if (!settingsMap.has(guildid)) {
+        if (hasGuildSettingsOnDisk(guildid)) {
+            dbMakeGuildSettingsDb(guildid);
+        } else {
+            return DEFAULT_EMOJI_SET['1default1'];
+        }
+    }
+
+    const first = (dbGetGuildSettings(guildid))().first();
+    try {
+        if (first.hasOwnProperty(boardName)) {
+            const result2 = {};
+            
+            const matches = (first[boardName].toString()).split('\n');
+            for (const match of matches) {
+                const kv = match.split(':');
+                const value = kv.length === 4 /*emoji ref '<:doge:662971757174718467>' has been split, so reconstitute */ 
+                        ? [kv[1], kv[2], kv[3]].join(':')
+                        : kv[1];
+
+                result2[kv[0]] = value;
+            }
+            return result2;
+        }
+    } catch (err) {
+        console.log('dbGetGuildCustomDeck', err);
+    }
+    return DEFAULT_EMOJI_SET['1default1'];
+
 }
 
 function dbGetCustomDeck(guildid, userid, boardName) {
@@ -397,52 +490,50 @@ function dbGetCustomDeck(guildid, userid, boardName) {
             dbMakeSettingsDb(guildid, userid);
         } else {
             console.log('dbGetCustomDeck', 'not has ======');
-            return DEFAULT_EMOJI_SET['1default1'];
+            return dbGetGuildCustomDeck(guildid, boardName);//DEFAULT_EMOJI_SET['1default1'];
         }
     }
 
     const first = (dbGetUserSettings(guildid, userid))().first();
     try {
         if (first.hasOwnProperty(boardName)) {
-            //console.log('first[boardName]', first, first[boardName], first[boardName].toString());
-            //const cloneFood = { ...first[boardName] };
-            //console.log(first.customb, cloneFood);
-
-            //var downloaded = new TextDecoder('utf-16le')=.decode(fs.readFileSync(tempfilename));
-
             const result2 = {};
             
             const matches = (first[boardName].toString()).split('\n');
             for (const match of matches) {
                 const kv = match.split(':');
-                result2[kv[0]] = kv[1];
-                //console.log(match);
-                //console.log(match.index)
+                const value = kv.length === 4 /*emoji ref '<:doge:662971757174718467>' has been split, so reconstitute */ 
+                        ? [kv[1], kv[2], kv[3]].join(':')
+                        : kv[1];
+
+                result2[kv[0]] = value;
             }
             return result2;
-            const result = {};
-            const testa = (first[boardName].toString().split(','));
-            testa.forEach(function(value, index, array) {
-                const wut = value.split('"');
-                console.log(wut);
-                if (index == 0) {
-                    result[wut[1]] = wut[2];
-                } else {
-                    result[wut[1]] = wut[3];
-                }
-            });
-
-            // const result = [];
-            // for (const (variable, chara) in first[boardName]) {  
-            //     result.push(variable);
-            // }
-            return result;
         }
     } catch (err) {
         console.log('dbGetCustomDeck', err);
     }
-    return DEFAULT_EMOJI_SET['1default1'];
+    return dbGetGuildCustomDeck(guildid, boardName);//DEFAULT_EMOJI_SET['1default1'];
 }
+
+function dbGetGuildSettingAutoReact(guildid) {
+    if (!settingsMap.has(guildid)) {
+        if (hasGuildSettingsOnDisk(guildid)) {
+            dbMakeGuildSettingsDb(guildid);
+        } else {
+            console.log('dbGetGuildSettingAutoReact', 'not has ======');
+            return DEFAULT_AUTOREACT;
+        }
+    }
+    const first = (dbGetGuildSettings(guildid))().first();
+    if (typeof first.autoreact === 'undefined') {
+        return DEFAULT_AUTOREACT;
+    }
+
+    if (first.length > 5) return false; //quick check before a JSON.parse
+    return JSON.parse(first.autoreact.toString().toLowerCase());
+}
+
 
 function dbGetSettingAutoReact(guildid, userid) {
     if (!settingsMap.has(userid)) {
@@ -450,15 +541,14 @@ function dbGetSettingAutoReact(guildid, userid) {
             dbMakeSettingsDb(guildid, userid);
         } else {
             console.log('dbGetSettingAutoReact', 'not has ======');
-            return DEFAULT_AUTOREACT;
+            return dbGetGuildSettingAutoReact(guildid);
         }
     }
     const first = (dbGetUserSettings(guildid, userid))().first();
-    //console.log('first        ', first);
     if (typeof first.autoreact === 'undefined') {
-        return DEFAULT_AUTOREACT;
+        return dbGetGuildSettingAutoReact(guildid);
     }
-    //console.log('dbGetSettingAutoReact', first, first.autoreact.toString(), JSON.parse(first.autoreact.toString().toLowerCase()));
+
     if (first.length > 5) return false; //quick check before a JSON.parse
     return JSON.parse(first.autoreact.toString().toLowerCase());
 }
