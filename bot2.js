@@ -643,6 +643,10 @@ function makeEmojiBoard(guildid, userid, chessjs, isFlipped, boardName) {
     }
 }
 
+// function showInfo(guildid, channel, messageauthorsgame, messageauthorid, infoThing) {
+//     return chessyInfo(guildid, channel.id, messageauthorid, infoThing, )
+// }
+
 function showBoard(guildid, requesterid, channel, existingGame, reactionArray, selected) {
     if (typeof selected === 'undefined') selected = null;
     if (typeof existingGame.chessjs === 'undefined' || existingGame.chessjs === null) return;
@@ -678,15 +682,49 @@ function showBoard(guildid, requesterid, channel, existingGame, reactionArray, s
     return showBoardAscii(guildid, requesterid, channel, existingGame, reactionArray, whonext, whoNextGame, haveSelection, haveData, dataStr);
 }
 
-function chessyInfo(guildid, channelid, messageauthorid, gameKeysInThisChannel, infoThing, chessjs, channel) {
+function chessyInfo(guildid, channelid, messageauthorid, infoThing, chessjs, channel) {
     const fen = chessjs.fen();
-    const infoString = JSON.stringify(chessy.getInfo(fen, [infoThing]), null, '\t');
 
-    const moves = infoThing.match(VALID_SQUARE_REGEX)
-        ? '\nPossible moves for ' + infoThing + ': ' + chessjs.moves({ square: infoThing, verbose: true }).map(m => m.to).join(", ")
+    console.log('chessy', JSON.stringify(chessy.getInfo(fen, [infoThing]), null, '\t'));
+
+    const infoObj = ( chessy.getInfo(fen, [infoThing]) )[infoThing];
+    console.log('chessy', infoObj);
+
+    const pieceDataStr0 = infoObj.piece != null
+        ? infoThing + ': ' + [infoObj.piece.color, infoObj.piece.type].join(", ") + '\n'
         : '';
 
-    return channel.send('Info for **' + infoThing + '**:  ' + '```' + infoString + '\n' + moves + '```')
+    const pieceDateStr1 = infoObj.attacking !== null 
+        ? 'Ia attacking:' + infoObj.attacking.join(', ') + '\n'
+        : '';
+
+    const pieceDateStr2 = infoObj.defenses !== null 
+        ? 'Defended by: ' + infoObj.defenses.join(', ') + '\n'
+        : '';
+
+    const pieceDateStr3 = infoObj.defending !== null 
+        ? 'Is defending: ' + infoObj.defending.join(', ') + '\n'
+        : '';
+
+    const pieceDateStr4 = infoObj.threats !== null 
+        ? 'Threatened by: ' + infoObj.threats.join(', ') + '\n'
+        : '';
+
+    const pieceDateStr5 = infoObj.sights !== null 
+        ? 'Can see: ' + infoObj.sights.join(', ') + '\n'
+        : '';
+
+    const pieceDateStr = pieceDataStr0+pieceDateStr1+pieceDateStr2+pieceDateStr3+pieceDateStr4+pieceDateStr5;
+
+    const daMoves = chessjs.moves({ square: infoThing, verbose: true });
+    const moves = daMoves.length > 0
+        ? '\nMoves for ' + infoThing + ': ' + daMoves.map(m => m.to).join(", ") + '\n'
+        : '\nThis piece can not move\n';
+
+
+    const infoString = '```' + pieceDateStr + moves + '```';
+    return tellUser(guildid, channelid, messageauthorid, infoString, EMOJI_INFO);
+    //return channel.send('Info for **' + infoThing + '**:  ' + '```' + infoString + '\n' + moves + '```')
 }
 
 function reactGameInvite(guildid, channel, userid, authorid, isAcceptance, isWhite) {
@@ -1378,28 +1416,30 @@ function processVerb(guildid, message, channelid, messageauthorid, gameKeysInThi
 
         case 'info':
             if (isExistingGame) {
-                const messageauthorsgame = existingGame.filter(f => f.key === repo.dbMakeKey(guildid, messageauthorid, channelid));
+                const messageauthorsgame = existingGame.filter(f => f.key === repo.dbMakeKey(guildid, messageauthorid, channelid))[0];
 
                 if (typeof messageauthorsgame.data === 'undefined') messageauthorsgame.data = [];
                 /*if (parsedMessage.infoThing.toLowerCase() === 'clear') {parsedMessage.infoThing = '';};*/
 
                 var infoThing = messageauthorsgame.data.join('');
-                if (parsedMessage.infoThing.length > 0) {
+                if (parsedMessage.infoThing !== null && parsedMessage.infoThing.length > 0) {
                     infoThing = parsedMessage.infoThing;
                 }
 
-                repo.dbUpdateForUser(guildid, messageauthorid, channelid, { data: messageauthorsgame.data });
+                //repo.dbUpdateForUser(guildid, messageauthorid, channelid, { data: messageauthorsgame.data });
 
                 /* 
                   
                     How to show the info?????
                   
                  */
-                /////////////////showInfo(guildid, message.channel, messageauthorsgame, messageauthorid, infoThing);
-
-
-                showBoard(guildid, messageauthorid, message.channel, messageauthorsgame, emoji_board_toolkit)
+                
+                chessyInfo(guildid, channelid, messageauthorid, infoThing, existingGame[0].chessjs, message.channel)
+                    .then(t => showBoard(guildid, messageauthorid, message.channel, messageauthorsgame, emoji_board_toolkit))
                     .catch(console.log);
+                //showInfo(guildid, message.channel, messageauthorsgame, messageauthorid, infoThing);
+
+
                 //chessyInfo(guildid, channelid, messageauthorid, gameKeysInThisChannel, parsedMessage.infoThing, existingGame[0].chessjs, message.channel)
                 //    .catch(console.log);
             }                        
@@ -1541,6 +1581,20 @@ function startBot() {
                             isProcessed = true;
                             break;
 
+                        case EMOJI_INFO:
+                            try
+                            {
+                                const infoUserData = repo.dbGetForUserKey(guildid, userid, channelid)[0].data;
+                                processVerb(guildid, reaction.message, channelid, userid, repo.dbGetGameKeysForUser(guildid, userid, channelid), {
+                                    verb: 'info',
+                                    infoThing: infoUserData,
+                                    userid: userid
+                                });
+                            } catch(err) {
+                                console.log('case EMOJI_INFO:', err);
+                            }
+                            isProcessed = true;
+                            break;
                     }
                     if (isProcessed) {
                         return;
@@ -1562,7 +1616,15 @@ function startBot() {
                         userid: userid
                     });
                     return;
-                }
+                } 
+                // else if (reactionEmojiName === EMOJI_INFO) {
+                //     processVerb(guildid, reaction.message, channelid, userid, repo.dbGetGameKeysForUser(guildid, userid, channelid), {
+                //         verb: 'info',
+                //         infoThing: letters[emoji_navigation_letters.indexOf(reactionEmojiName)],
+                //         userid: userid
+                //     });
+                //     return;
+                // }
 
             });
 
