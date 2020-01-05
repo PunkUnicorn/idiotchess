@@ -465,7 +465,7 @@ function getGuildSettingDeckType(guildid, userid, setting_name) {
     }
     const first = (dbGetGuildSettings(guildid))().first();
 
-    if (typeof first.boardtype === 'undefined') {
+    if (typeof first.boardtype === 'undefined' || first.boardtype === null) {
         return DEFAULT_DECKTYPE;
     }
     return first.boardtype;
@@ -482,7 +482,7 @@ function dbGetSettingDeckType(guildid, userid) {
     }
     const first = (dbGetUserSettings(guildid, userid))().first();
 
-    if (typeof first.boardtype === 'undefined') {
+    if (typeof first.boardtype === 'undefined' || first.boardtype === null) {
         return getGuildSettingDeckType(guildid);//DEFAULT_DECKTYPE;
     }
     return first.boardtype;
@@ -560,7 +560,7 @@ function dbGetGuildSettingAutoFlip(guildid) {
         }
     }
     const first = (dbGetGuildSettings(guildid))().first();
-    if (typeof first.autoflip === 'undefined') {
+    if (typeof first.autoflip === 'undefined' || first.autoflip === null) {
         return DEFAULT_AUTOFLIP;
     }
 
@@ -577,7 +577,7 @@ function dbGetGuildSettingAutoReact(guildid) {
         }
     }
     const first = (dbGetGuildSettings(guildid))().first();
-    if (typeof first.autoreact === 'undefined') {
+    if (typeof first.autoreact === 'undefined' || first.autoreact === null) {
         return DEFAULT_AUTOREACT;
     }
 
@@ -594,7 +594,7 @@ function dbGetSettingAutoFlip(guildid, userid) {
         }
     }
     const first = (dbGetUserSettings(guildid, userid))().first();
-    if (typeof first.autoflip === 'undefined') {
+    if (typeof first.autoflip === 'undefined' || first.autoflip === null) {
         return dbGetGuildSettingAutoFlip(guildid);
     }
 
@@ -611,7 +611,7 @@ function dbGetSettingAutoReact(guildid, userid) {
         }
     }
     const first = (dbGetUserSettings(guildid, userid))().first();
-    if (typeof first.autoreact === 'undefined') {
+    if (typeof first.autoreact === 'undefined' || first.autoreact === null) {
         return dbGetGuildSettingAutoReact(guildid);
     }
 
