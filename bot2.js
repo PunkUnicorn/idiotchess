@@ -588,8 +588,8 @@ function makeEmojiBoard(guildid, userid, chessjs, isFlipped, boardName) {
                     break;
 
             const thisSquare = (colIndex === 0 || colIndex % 2 === 0)
-                ? yStagger ? board.white : board.black
-                : yStagger ? board.black : board.white;
+                ? yStagger ? board.black : board.white
+                : yStagger ? board.white : board.black;
 
             const piece = chessjs.get(letters[colIndex] + rowNo.toString());
             if (piece === null) {
@@ -1229,7 +1229,7 @@ function processVerb(guildid, message, channelid, messageauthorid, gameKeysInThi
             break;
 
         case 'help':
-            if (gameKeysInThisChannel.length === 0) {
+            //if (gameKeysInThisChannel.length === 0) {
                 var page = '1';
                 if (parsedMessage.restOfMessage.length > 0) {
                     var page = parsedMessage.restOfMessage.join(' ');                    
@@ -1274,7 +1274,7 @@ function processVerb(guildid, message, channelid, messageauthorid, gameKeysInThi
                 tellUser(guildid, channelid, messageauthorid, finalText, emoji_speakinghead, message )
                     .catch(console.log);
 
-            }
+            //}
 
             break;
 
