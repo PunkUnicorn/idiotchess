@@ -400,6 +400,7 @@ function dbUpdateSetting(guildid, userid, saveSettingObj) {
 
 //    return u(leadingSurrogate) + u(trailingSurrogate);
 //}
+const DEFAULT_AUTOFLIP = true;
 const DEFAULT_AUTOREACT = false;
 const DEFAULT_EMOJI_SET = {
     '1default1': {
@@ -550,6 +551,23 @@ function dbGetCustomDeck(guildid, userid, boardName) {
     return dbGetGuildCustomDeck(guildid, boardName);
 }
 
+function dbGetGuildSettingAutoFlip(guildid) {
+    if (!settingsMap.has(guildid)) {
+        if (hasGuildSettingsOnDisk(guildid)) {
+            dbMakeGuildSettingsDb(guildid);
+        } else {
+            return DEFAULT_AUTOFLIP;
+        }
+    }
+    const first = (dbGetGuildSettings(guildid))().first();
+    if (typeof first.autoflip === 'undefined') {
+        return DEFAULT_AUTOFLIP;
+    }
+
+    if (first.length > 5) return false; //quick check before a JSON.parse
+    return JSON.parse(first.autoflip.toString().toLowerCase());
+}
+
 function dbGetGuildSettingAutoReact(guildid) {
     if (!settingsMap.has(guildid)) {
         if (hasGuildSettingsOnDisk(guildid)) {
@@ -567,6 +585,22 @@ function dbGetGuildSettingAutoReact(guildid) {
     return JSON.parse(first.autoreact.toString().toLowerCase());
 }
 
+function dbGetSettingAutoFlip(guildid, userid) {
+    if (!settingsMap.has(userid)) {
+        if (hasSettingsOnDisk(guildid, userid)) {
+            dbMakeSettingsDb(guildid, userid);
+        } else {
+            return dbGetGuildSettingAutoFlip(guildid);
+        }
+    }
+    const first = (dbGetUserSettings(guildid, userid))().first();
+    if (typeof first.autoflip === 'undefined') {
+        return dbGetGuildSettingAutoFlip(guildid);
+    }
+
+    if (first.length > 5) return false; //quick check before a JSON.parse
+    return JSON.parse(first.autoflip.toString().toLowerCase());
+}
 
 function dbGetSettingAutoReact(guildid, userid) {
     if (!settingsMap.has(userid)) {
@@ -660,6 +694,7 @@ module.exports = {
 
     dbResolveSettings, 
     dbUpdateSetting,
+    dbGetSettingAutoFlip,
     dbGetSettingAutoReact,
     dbGetSettingDeckType,
     dbGetCustomDeck,

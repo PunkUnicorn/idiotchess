@@ -119,6 +119,11 @@ function parseMessage(bot, messageuserid, channelid, content, allNonBotMentions,
                         verb = 'info';
                         break;
 
+                    case 'help':
+                    case 'halp':
+                        verb = 'help';
+                        break;
+                        
                     case 'select':
                     case 'selection':
                         isInfoMode = true;

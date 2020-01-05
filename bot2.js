@@ -480,7 +480,12 @@ function showBoardAscii(guildid, requesterid, channel, existingGame, reactionArr
     var ascii = existingGame.chessjs.ascii();
 
     if (!whoNextGame[0].isWhite) {
-        isFlipped = true;
+        const setting = repo.dbGetSettingAutoFlip(guildid, requesterid);
+        if (typeof setting === ' undefined') {
+            isFlipped = true;
+        } else {
+            isFlipped = setting;
+        }
     }
 
 
@@ -631,7 +636,7 @@ function makeEmojiBoard(guildid, userid, chessjs, isFlipped, boardName) {
     if (!isFlipped) {
         result.push(spaceUnicode);
     } else {
-        result.push(board.black);
+        result.push('　  ' /* idographic space - special width and a couple of tiny unicode space*/);
     }
 
     if (!isFlipped) {
@@ -1221,6 +1226,56 @@ function processVerb(guildid, message, channelid, messageauthorid, gameKeysInThi
                         .catch(console.log);
                 }
             }
+            break;
+
+        case 'help':
+            if (gameKeysInThisChannel.length === 0) {
+                var page = '1';
+                if (parsedMessage.restOfMessage.length > 0) {
+                    var page = parsedMessage.restOfMessage.join(' ');                    
+                }
+                const helpText1 = 
+                    '\n> `@idiotchess play @<your friend>`' 
+                    + '\nor to continue a game:'
+                    + '\n> `@idiotchess play @<your friend> [timeout <number of mins. (default is one min)>] [fen <chess FEN mumbo jumbo here>]`'
+                    + '\n' + 'e.g.\n'
+                    + '\n> `@idiotchess play @BestBuddy`'
+                    + '\nor to continue a game:'
+                    + '\n> `@idiotchess play @Topalov fen rnbqkbnr/pp1ppppp/8/2p5/4P3/8/PPPP1PPP/RNBQKBNR w KQkq c6 0 2`'
+                    + '\n\n' + 'Whilst playing you can save the game using the `fen` command, and continue it later:\n> ```@idiotchess fen```\nThis gives you the chess FEN code for the current board setup, and who plays next.';
+                const helpText2 = 
+                    'While in play:\n\n> `@diotchess board`\n> `@idiotchess select <piece>`\n> `@idiotchess info [<piece>]`\n> `@idiotchess move <piece ref>`';
+
+                const helpText3 = 
+                    'Also:\n\n> `@idiotbot get [<variable name>]`\n> `@idiotchess set <variable name> <value>`'
+                    + '\n\nWith the variable `boardtype` it\'s possible for you to create your own emoji board...\nenjoy!';
+
+                var finalText = helpText1;
+                switch (page) {
+                    case '3':
+                    case 'third':
+                    case '3rd':
+                        finalText = [helpText1, helpText2, helpText3].join('\n\n');
+                        break;
+
+                    case '2':
+                    case 'second':
+                    case '2nd':
+                        finalText = [helpText1, helpText2, '@idiotchess `help third` for the next'].join('\n\n');
+                        break;
+
+                    case '1':
+                    case 'first':
+                    case '1st':
+                    default:
+                        finalText = [helpText1, '@idiotchess `help second` for the next'].join('\n\n');
+                        break;
+                }
+                tellUser(guildid, channelid, messageauthorid, finalText, emoji_speakinghead, message )
+                    .catch(console.log);
+
+            }
+
             break;
 
         case 'pgn':
