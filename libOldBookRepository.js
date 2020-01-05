@@ -2,6 +2,12 @@
 
 const gamesMap = new Map();
 
+function isValidSettingName(setting_name) {
+    const validNameRegex = /^[a-z0-9]+$/g;
+    if (typeof setting_name === 'undefined' || setting_name === null || setting_name.length === 0) return false;
+    return setting_name.match(validNameRegex);
+}
+
 function dbMakeDb(guildid) {
     return gamesMap.set(guildid, TAFFY());
 }
@@ -195,6 +201,30 @@ function timerGetAll() {
 
 
 const fs = require('fs');
+
+
+
+
+const authContent = fs.readFileSync('../guild.auth.json');
+const guildAuth = ( JSON.parse( new TextDecoder().decode(authContent)) );
+
+function dbResolveCode(code) {
+    try
+    {
+        return guildAuth[code];
+    } catch (err) {
+        console.log("resolve code:", err);
+        return false;
+    }
+}
+
+
+
+
+
+
+
+
 const settingsMap = new Map();
 
 function hasSettingsOnDisk(guildid, userid) {
@@ -264,12 +294,6 @@ function saveSettingsToDisk(guildid, userid, settingsObj) {
     if (typeof testObj.loadSettingsFromDiskError !== 'undefined')
         throw testObj.loadSettingsFromDiskError;
 
-    function isValidSettingName(setting_name) {
-        const validNameRegex = /^[a-z]+$/g;
-        if (typeof setting_name === 'undefined' || setting_name === null || setting_name.length === 0) return false;
-        return setting_name.match(validNameRegex);
-    }
-
     Object.keys(testObj)
         .concat(Object.keys(settingsObj))
         .forEach(key => {
@@ -304,16 +328,27 @@ function dbGetGuildSettings(guildid) {
 function dbGetUserSettings(guildid, userid) {
     if (typeof guildid === 'undefined') throw 'no guildid';
     if (typeof userid === 'undefined') throw 'no userid';
+
     if (!settingsMap.has(userid)) {
         dbMakeSettingsDb(guildid, userid);
     }
     return settingsMap.get(userid);
 }
 
-function dbGetSettings(guildid, userid) {
+function dbResolveSettings(guildid, userid) {
+    const guildDb = dbGetGuildSettings(guildid, userid);
     const db = dbGetUserSettings(guildid, userid);
-    console.log('dbGetSettings', db().get());
-    return db().get();
+
+    const guildSettingsCopy = guildDb().first();
+    const userSettings = db().first();
+
+    Object.keys(userSettings).forEach(function(key, index) {
+        if (!isValidSettingName(key)) return;
+        guildSettingsCopy[key] = userSettings[key];
+    });
+
+    return [ guildSettingsCopy ];
+    //return ( TAFFY(db().get())().merge( guildDb().first()) ).first();//( TAFFY(guildDb().first())().merge( db().first()) ).first();
 }
 
 function dbUpdateSetting(guildid, userid, saveSettingObj) {
@@ -489,8 +524,7 @@ function dbGetCustomDeck(guildid, userid, boardName) {
         if (hasSettingsOnDisk(guildid, userid)) {
             dbMakeSettingsDb(guildid, userid);
         } else {
-            console.log('dbGetCustomDeck', 'not has ======');
-            return dbGetGuildCustomDeck(guildid, boardName);//DEFAULT_EMOJI_SET['1default1'];
+            return dbGetGuildCustomDeck(guildid, boardName);
         }
     }
 
@@ -513,7 +547,7 @@ function dbGetCustomDeck(guildid, userid, boardName) {
     } catch (err) {
         console.log('dbGetCustomDeck', err);
     }
-    return dbGetGuildCustomDeck(guildid, boardName);//DEFAULT_EMOJI_SET['1default1'];
+    return dbGetGuildCustomDeck(guildid, boardName);
 }
 
 function dbGetGuildSettingAutoReact(guildid) {
@@ -521,7 +555,6 @@ function dbGetGuildSettingAutoReact(guildid) {
         if (hasGuildSettingsOnDisk(guildid)) {
             dbMakeGuildSettingsDb(guildid);
         } else {
-            console.log('dbGetGuildSettingAutoReact', 'not has ======');
             return DEFAULT_AUTOREACT;
         }
     }
@@ -540,7 +573,6 @@ function dbGetSettingAutoReact(guildid, userid) {
         if (hasSettingsOnDisk(guildid, userid)) {
             dbMakeSettingsDb(guildid, userid);
         } else {
-            console.log('dbGetSettingAutoReact', 'not has ======');
             return dbGetGuildSettingAutoReact(guildid);
         }
     }
@@ -553,6 +585,21 @@ function dbGetSettingAutoReact(guildid, userid) {
     return JSON.parse(first.autoreact.toString().toLowerCase());
 }
 
+
+
+
+var gameCount = 0;
+function dbIncrementGameCount() {
+    gameCount++;
+}
+
+function dbDecrementGameCount() {
+    gameCount--;
+}
+
+function dbGetGameCount() {
+    return gameCount;
+}
 
 function pretty(data) {
     return JSON.parse(data().stringify());
@@ -585,6 +632,8 @@ function runTests() {
 }
 
 module.exports = {
+    dbResolveCode,
+
     dbMakeDb,
     dbMakeKey,
 
@@ -609,12 +658,15 @@ module.exports = {
     timerClear,
     timerGetAll,
 
-    dbGetSettings, //(guildid, messageauthorid);
-    dbUpdateSetting, //(guildid, messageauthorid, saveSettingObj);
+    dbResolveSettings, 
+    dbUpdateSetting,
     dbGetSettingAutoReact,
     dbGetSettingDeckType,
     dbGetCustomDeck,
 
+    dbIncrementGameCount,
+    dbDecrementGameCount,
+    dbGetGameCount,
 
     runTests    
 };

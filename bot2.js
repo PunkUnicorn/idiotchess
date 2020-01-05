@@ -111,6 +111,10 @@ function cancelGame(guildid, channelid, messageauthorid, options) {
     destroyInviteTimer(guildid, channelid, game[0].authorid); ///---
     repo.dbRemoveGame(guildid, messageauthorid, channelid);
 
+    if (game[0].state !== NS_INVITED) {
+        repo.dbDecrementGameCount();
+    }
+
     const authorsGame = game.filter(f => f.isAuthor);
     if (authorsGame.length === 0) {
         throw 'err: wut no games';
@@ -122,12 +126,12 @@ function timeoutOpenedNegociations(guildid, message, channelid, messageauthorid,
     return tellUsers(guildid, channelid, [messageauthorid, targetid], timeoutMsg, broken_heart, message);
 }
 
-function reOpenGameNegociation(guildid, message, channelid, messageauthorid, targetid, timeout, isWhite) {
+function reOpenGameNegociation(guildid, message, channelid, messageauthorid, targetid, timeout, isWhite, fenStuff, pgnStuff) {
     cancelGame(guildid, channelid, messageauthorid);
-    return openGameNegociation(guildid, message, channelid, messageauthorid, targetid, timeout, isWhite);
+    return openGameNegociation(guildid, message, channelid, messageauthorid, targetid, timeout, isWhite, fenStuff, pgnStuff);
 }
 
-function openGameNegociation(guildid, message, channelid, messageauthorid, targetid, invitetimeoutmins, iswhite) {
+function openGameNegociation(guildid, message, channelid, messageauthorid, targetid, invitetimeoutmins, iswhite, fenStuff, pgnStuff) {
 
     return message.react(love_letter)
         .then(function (reaction) {
@@ -160,7 +164,9 @@ function openGameNegociation(guildid, message, channelid, messageauthorid, targe
                                         challengemessageid,
                                         state: NS_INVITED,
                                         isWhite: iswhite,
-                                        gameStarted: dateStarted
+                                        gameStarted: dateStarted,
+                                        fenStuff: ( fenStuff == null ? [] : fenStuff ),
+                                        pgnStuff: ( pgnStuff == null ? [] : pgnStuff )
                                     };
 
                                     repo.timerAdd(guildid, channelid, messageauthorid, timer);
@@ -360,6 +366,8 @@ const emoji_crossundo = '❎';
 const EMOJI_SHOW_LETTERS = emoji_letters;
 const EMOJI_SHOW_NUMBERS = emoji_numbers
 const EMOJI_INFO = emoji_information;
+const EMOJI_PRIZE = emoji_trophy;
+
 const EMOJI_SCROLL_LOLWUT = emoji_scroll;
 const EMOJI_CLEARSELECTION = emoji_crossundo;
 
@@ -368,6 +376,7 @@ const EMOJI_SETTINGS = emoji_gear;
 
 const emoji_board_toolkit = [EMOJI_SHOW_LETTERS, EMOJI_SHOW_NUMBERS ];
 const emoji_board_toolkit_withselection = [EMOJI_SHOW_LETTERS, EMOJI_SHOW_NUMBERS, EMOJI_INFO, EMOJI_CLEARSELECTION ];
+const emoji_board_gameover = [ EMOJI_PRIZE ];
 
 const emoji_navigation_numbers = [ emoji_1, emoji_2, emoji_3, emoji_4, emoji_5, emoji_6, emoji_7, emoji_8];
 const emoji_navigation_letters = [ emoji_a, emoji_b, emoji_c, emoji_d, emoji_e, emoji_f, emoji_g, emoji_h];
@@ -461,7 +470,7 @@ function isValidPiece(fen, piece) {
 }
 
 
-function showBoardAscii(guildid, requesterid, channel, existingGame, reactionArray, whonext, whoNextGame, haveSelection, haveData, dataStr) {
+function showBoardAscii(guildid, requesterid, channel, existingGame, reactionArray, whonext, whoNextGame, haveSelection, haveData, dataStr, usefulState, isOver, overReason) {
     if (requesterid === null) {
         requesterid = whonext.whonextid;
     }
@@ -510,17 +519,21 @@ function showBoardAscii(guildid, requesterid, channel, existingGame, reactionArr
         additionalEmoji.push(EMOJI_CLEARSELECTION);
     }
 
-    if (additionalEmoji.length > 0) {
+    const whoPlayNext = isOver 
+        ? '\n' + overReason + '... ' 
+        : '\n<@' + whonext.whonextid + '> to play... ' ;
+
+    if (additionalEmoji.length > 0 && !isOver) {        
         return channel
-            .send(board + dataStr + '\n<@' + whonext.whonextid + '> to play... ')
+            .send(board + dataStr + usefulState + whoPlayNext)
             .then(sentMessage => addEmojiArray(guildid, sentMessage, additionalEmoji))
             .then(sentReactionArray => {
                 addEmojiArray(guildid, sentReactionArray[0].message, reactionArray);
             });
     } else {
         return channel
-            .send(board + dataStr +'\n<@' + whonext.whonextid + '> to play... ')
-            .then(sentMessage => addEmojiArray(guildid, sentMessage, reactionArray));
+            .send(board + dataStr + usefulState + whoPlayNext)
+            .then(sentMessage => addEmojiArray(guildid, sentMessage, isOver ? emoji_board_gameover : reactionArray));
     }
 }
 
@@ -651,8 +664,40 @@ function showBoard(guildid, requesterid, channel, existingGame, reactionArray, s
     if (typeof selected === 'undefined') selected = null;
     if (typeof existingGame.chessjs === 'undefined' || existingGame.chessjs === null) return;
 
+    // is the game won?
+
+    const chessjs = existingGame.chessjs;
+    const isOver = chessjs.game_over();
+    var overReason = ''
+    if (isOver) {
+        if ( chessjs.in_checkmate() ) {
+            overReason = 'Checkmate';
+        } else if (chessjs.in_stalemate()) {
+             overReason = 'Stalemate';
+        } else if (chessjs.in_draw()) {
+            overReason = 'Draw';
+        }
+    }
+
+    const isInsufficientMaterial = chessjs.insufficient_material() 
+        ? '*Insufficient material for a win (K vs. K, K vs. KB, or K vs. KN)*'
+        : '';
+
+    const isThreeFold = chessjs.in_threefold_repetition() 
+        ? "*Threefold repetition has occurred*" 
+        : '';
+
+    const isCheck = chessjs.in_check() 
+        ? ' *Checkmate*'  
+        : '';
+
+    const usefulStateRaw = [isInsufficientMaterial, isThreeFold, isCheck].filter(f => f !== '\n' && f.length > 0).join('\n');
+    const usefulState = usefulStateRaw.length > 0 
+        ? '\n' + warning + ' ' + usefulStateRaw + '\n'
+        : '';
+
     const whonext = whoIsNext(guildid, existingGame.authorid, existingGame.targetid, channel.id)
-    const whoNextGame = repo.dbGetForUserKey(guildid, whonext.whonextid, channel.id);
+    const whoNextGame = repo.dbGetForUserKey(guildid, whonext.whonextid, channel.id);    
 
     var haveData = typeof whoNextGame[0].data !== 'undefined' && typeof whoNextGame[0].data.length > 0;
     var haveSelection = false;
@@ -679,16 +724,13 @@ function showBoard(guildid, requesterid, channel, existingGame, reactionArray, s
     }
 
 
-    return showBoardAscii(guildid, requesterid, channel, existingGame, reactionArray, whonext, whoNextGame, haveSelection, haveData, dataStr);
+    return showBoardAscii(guildid, requesterid, channel, existingGame, reactionArray, whonext, whoNextGame, haveSelection, haveData, dataStr, usefulState, isOver, overReason);
 }
 
 function chessyInfo(guildid, channelid, messageauthorid, infoThing, chessjs, channel) {
     const fen = chessjs.fen();
 
-    console.log('chessy', JSON.stringify(chessy.getInfo(fen, [infoThing]), null, '\t'));
-
     const infoObj = ( chessy.getInfo(fen, [infoThing]) )[infoThing];
-    console.log('chessy', infoObj);
 
     const pieceDataStr0 = infoObj.piece != null
         ? infoThing + ': ' + [infoObj.piece.color, infoObj.piece.type].join(", ") + '\n'
@@ -727,23 +769,46 @@ function chessyInfo(guildid, channelid, messageauthorid, infoThing, chessjs, cha
     //return channel.send('Info for **' + infoThing + '**:  ' + '```' + infoString + '\n' + moves + '```')
 }
 
-function reactGameInvite(guildid, channel, userid, authorid, isAcceptance, isWhite) {
+function reactGameInvite(guildid, channel, userid, authorid, isAcceptance, isWhite, fenStuff, pgnStuff) {
     const channelid = channel.id;
 
     if (isAcceptance) {
 
         //it's ON!
 
-        const chessjs = new Chess();
-        destroyInviteTimer(guildid, channelid, authorid, true, { chessjs }/*<-- which also updates the author row with this */);
+        var chessjs = null;
+        if (typeof pgnStuff !== 'undefined' && pgnStuff.length > 0) {
+            try {    
+                chessjs = new Chess();
+                chessjs.load_pgn(pgnStuff.join(' '));
+            } catch (err) {
+                console.log('reactGameInvite pgn err', pgnStuff, err);
+            }
+        } else  {
+            try {
+                chessjs = typeof fenStuff === 'undefined' || fenStuff.length === 0 
+                    ? new Chess()
+                    : new Chess(fenStuff.join(' '));
+            } catch(err) {
+                console.log('reactGameInvite fen err', fenStuff, err);
+            }
+        }
+
+        destroyInviteTimer(guildid, channelid, authorid, true, { chessjs:chessjs, fenStuff:[], pgnStuff:[] }/*<-- which also updates the author row with this */);
 
         repo.dbUpdateGameTarget(guildid, authorid, channelid, userid, { isWhite });
         repo.dbUpdateForGame(guildid, authorid, channelid, { state: NS_ACCEPTED });
 
-        const game = repo.dbGetForUserKey(guildid, authorid, channelid);
+        repo.dbIncrementGameCount();
+
+        /*LOGGING*/
+        {
+            const game = repo.dbGetForUserKey(guildid, authorid, channelid);
+            console.log('new game', guildid, channelid, authorid, game);
+        }
 
         return channel.send("It's ON! ")
-            .then(t => showBoard(guildid, authorid, channel, game[0], emoji_board_toolkit));
+            .then(t => showBoard(guildid, authorid, channel, repo.dbGetForUserKey(guildid, authorid, channelid)[0], emoji_board_toolkit));
 
     } else {
         return tellUserOfCancel(guildid, channelid, userid, { deleteIt: true });        
@@ -884,9 +949,13 @@ function processVerbData(guildid, message, channelid, messageauthorid, gameKeysI
 
         //auto move
         if (isValidMove(existingGame[0].chessjs.fen(), piece)) {
-            parsedMessage.verb = 'move';
-            parsedMessage.restOfMessage = [piece];
-            processVerb(guildid, message, channelid, messageauthorid, gameKeysInThisChannel, parsedMessage);//, existingGame, isExistingGame);
+            try {
+                parsedMessage.verb = 'move';
+                parsedMessage.restOfMessage = [piece];
+                processVerb(guildid, message, channelid, messageauthorid, gameKeysInThisChannel, parsedMessage);//, existingGame, isExistingGame);
+            } catch (err) {
+                console.log('processVerbData', err);
+            }
             return;
         }
 
@@ -935,7 +1004,7 @@ function processVerbPlay(guildid, message, channelid, messageauthorid, gameKeysI
 
             console.log('/* no existing game, start a new one: make an invite */');
 
-            openGameNegociation(guildid, message, channelid, messageauthorid, parsedMessage.targetid, parsedMessage.timeout, parsedMessage.isWhite)
+            openGameNegociation(guildid, message, channelid, messageauthorid, parsedMessage.targetid, parsedMessage.timeout, parsedMessage.isWhite, parsedMessage.fenStuff, parsedMessage.pgnStuff)
                 .catch(console.log);
 
         }
@@ -947,7 +1016,7 @@ function processVerbPlay(guildid, message, channelid, messageauthorid, gameKeysI
             console.log('/* they have a game invite open *from* someone else, cancel that and make a new invite */', existingGame, parsedMessage);
 
             tellUserOfCancel(guildid, channelid, messageauthorid, { optionalGameKeysInThisChannel: gameKeysInThisChannel, optionalMessage: message, deleteIt:true })
-                .then(t => openGameNegociation(guildid, message, channelid, messageauthorid, parsedMessage.targetid, parsedMessage.timeout, parsedMessage.isWhite))
+                .then(t => openGameNegociation(guildid, message, channelid, messageauthorid, parsedMessage.targetid, parsedMessage.timeout, parsedMessage.isWhite, parsedMessage.fenStuff, parsedMessage.pgnStuff))
                 .catch(console.log);
 
         } else if (existingGame[0].authorid === parsedMessage.messageauthorid) {
@@ -955,14 +1024,14 @@ function processVerbPlay(guildid, message, channelid, messageauthorid, gameKeysI
             if (existingGame[0].targetid === parsedMessage.targetid) {
                 console.log('/* they have aready invited this person, so reset the invite to these new parameters */');
 
-                reOpenGameNegociation(guildid, message, channelid, messageauthorid, parsedMessage.targetid, parsedMessage.timeout, parsedMessage.isWhite)
+                reOpenGameNegociation(guildid, message, channelid, messageauthorid, parsedMessage.targetid, parsedMessage.timeout, parsedMessage.isWhite, parsedMessage.fenStuff, parsedMessage.pgnStuff)
                     .catch(console.log);
 
             } else {
                 console.log('/* they have aready invited someomne else, so cancel the previous and start the new one */');
 
                 tellUserOfCancel(guildid, channelid, messageauthorid, { optionalGameKeysInThisChannel: gameKeysInThisChannel, optionalMessage: message, deleteIt:true })
-                    .then(t => openGameNegociation(guildid, message, channelid, messageauthorid, parsedMessage.targetid, parsedMessage.timeout, parsedMessage.isWhite))
+                    .then(t => openGameNegociation(guildid, message, channelid, messageauthorid, parsedMessage.targetid, parsedMessage.timeout, parsedMessage.isWhite, parsedMessage.fenStuff, parsedMessage.pgnStuff))
                     .catch(console.log);
 
             }
@@ -977,9 +1046,13 @@ function processVerbPlay(guildid, message, channelid, messageauthorid, gameKeysI
 
         }
     } else if (existingGame[0].state === NS_ACCEPTED) {
-        console.log(' /* game in flow, take \'play\' to mean move a piece */');
-        parsedMessage.verb = 'move';
-        processVerb(guildid, message, channelid, messageauthorid, gameKeysInThisChannel, parsedMessage);
+        try {
+            console.log(' /* game in flow, take \'play\' to mean move a piece */');
+            parsedMessage.verb = 'move';
+            processVerb(guildid, message, channelid, messageauthorid, gameKeysInThisChannel, parsedMessage);
+        } catch (err) {
+            console.log('processVerbPlay', err);
+        }
     }
 }
 
@@ -1049,7 +1122,7 @@ function movePieceBoyakasha(guildid, channelid, userid, existingGame, cleanedMov
 
         return tellUser(guildid, channelid, userid, ', sorry unable to move ' + move + extraInfo + exclamation, exclamation, message)
             .then(t => showBoard(guildid, userid, message.channel, repo.dbGetForUserKey(guildid, existingGame.authorid, channelid)[0], emoji_board_toolkit));
-    }
+    } 
 
     repo.dbUpdateForUser(guildid, existingGame.authorid, channelid, { chessjs });
     repo.dbUpdateForGame(guildid, existingGame.authorid, channelid, { data:[] });
@@ -1078,18 +1151,11 @@ function getLettersNumbersForValidMoves(piece, existingGame, isWhite) {
         finalPiece = finalPieces.join('');
     }
 
-    //const pieceinfoObj = chessy.getInfo(existingGame.chessjs.fen(), [finalPiece]);
-    //if (typeof pieceinfoObj[finalPiece] === 'undefined' || pieceinfoObj[finalPiece].sights.length === 0) {
-    //    return [emoji_navigation_letters, emoji_navigation_numbers];
-    //}
-    //const pieceinfo = pieceinfo[finalPiece].sights;
     const pieceinfo = existingGame.chessjs.moves({ square: finalPiece, verbose: true });
-
     
     // only showing the first piece atm
     const ourLetters = pieceinfo.map(m => m.to[0]);
     const ourNumbers = pieceinfo.map(m => m.to[1]);
-
 
     var uniqueLetters = [...new Set(ourLetters)];
     var uniqueNumbers = [...new Set(ourNumbers)];
@@ -1099,16 +1165,8 @@ function getLettersNumbersForValidMoves(piece, existingGame, isWhite) {
         uniqueNumbers = uniqueNumbers.reverse();
     }
 
-    //uniqueLetters.forEach(val => console.log('letters:', val, letters.indexOf(val)));
-    //uniqueNumbers.forEach(val => console.log('numbers:', val, parseInt(val, 10)));
     const emojiLetters = uniqueLetters.map(val => emoji_navigation_letters[letters.indexOf(val)]);
     const emojiNumbers = uniqueNumbers.map(val => emoji_navigation_numbers[parseInt(val, 10)-1]);
-
-
-
-
-    //const emojiLetters = uniqueLetters.map(val => (isWhite ? emoji_navigation_letters : emoji_navigation_letters.reverse())[letters.indexOf(val)]);
-    //const emojiNumbers = uniqueNumbers.map(val => (isWhite ? emoji_navigation_numbers : emoji_navigation_numbers.reverse())[numbers.indexOf(val)]);
 
     return [emojiLetters, emojiNumbers ];
 }
@@ -1156,6 +1214,24 @@ function processVerb(guildid, message, channelid, messageauthorid, gameKeysInThi
 
             break;
 
+        case 'fen':
+            if (existingGame.length > 0) {
+                if (existingGame[0].state === NS_ACCEPTED) {
+                    tellUser(guildid, channelid, messageauthorid, ': game fen:\n```' + existingGame[0].chessjs.fen() + '```', information, message)
+                        .catch(console.log);
+                }
+            }
+            break;
+
+        case 'pgn':
+            if (existingGame.length > 0) {
+                if (existingGame[0].state === NS_ACCEPTED) {
+                    tellUser(guildid, channelid, messageauthorid, ': game pgn:\n```' + existingGame[0].chessjs.pgn() + '```', information, message)
+                        .catch(console.log);
+                }
+            }
+            break;
+    
         case 'play':
             processVerbPlay(guildid, message, channelid, messageauthorid, gameKeysInThisChannel, parsedMessage, existingGame, isExistingGame);
             break;
@@ -1168,16 +1244,27 @@ function processVerb(guildid, message, channelid, messageauthorid, gameKeysInThi
             break;
 
         case 'get':
-            const settings = repo.dbGetSettings(guildid, messageauthorid);
+            const settings = repo.dbResolveSettings(guildid, messageauthorid);
             const ourGettings = settings.length > 0 ? settings[0] : {};
 
+            // add default settings
+            if (!ourGettings.hasOwnProperty('autoreact')) {
+                ourGettings['autoreact'] = null;
+            }
+            if (!ourGettings.hasOwnProperty('boardtype')) {
+                ourGettings['boardtype'] = null;
+            }
+            if (!ourGettings.hasOwnProperty('autoflip')) {
+                ourGettings['autoflip'] = null;
+            }
+
             if (typeof parsedMessage.settingName === 'undefined' || parsedMessage.settingName === null || parsedMessage.settingName.length === 0) {
-                const endMessageParts = ['\n' + emoji_speakinghead + '  '];
+                const endMessageParts = [emoji_speakinghead + '  '];
                 if (Object.keys(ourGettings).length) {
                     Object.keys(ourGettings).forEach(key => {
                         if (!isValidSettingName(key)) return;
                         //endMessageParts.push('\n  - Setting `' + key + '` is:\n```' + ourGettings[key] + '```');
-                        endMessageParts.push('\n  - Setting `' + key + '`');
+                        endMessageParts.push(' - Setting `' + key + '`');
                     });
                 }
                 tellUser(guildid, channelid, messageauthorid, '\n' + endMessageParts.join('\n'), emoji_speakinghead, message)
@@ -1228,34 +1315,16 @@ function processVerb(guildid, message, channelid, messageauthorid, gameKeysInThi
                 try {
 
                     //get the attachment
-
-                    //strip out functions by JSON.parse( JSON.stringify( loaded ) )
-
-                    console.log('message.attachments', message.attachments.first());
+                    
                     const first = message.attachments.first();
                     if (first == undefined) {
                         return;
                     }
-                    console.log('first', first);
+
                     if (first.filesize > 3000) {
                         return;
                     }
-                    // var http = require('http');
-                    // var fs = require('fs');
 
-                    // var download = function (url, dest, cb) {
-                    //     var file = fs.createWriteStream(dest);
-                    //     var request = http.get(url, function (response) {
-                    //         response.pipe(file);
-                    //         file.on('finish', function () {
-                    //             file.close(cb);
-                    //         });
-                    //     });
-                    // }
-
-
-                    
-                    //const file = fs.createWriteStream("data.txt");
                     function downloads(url, dest, cb)
                     {
                         const file = fs.createWriteStream(dest);
@@ -1268,99 +1337,17 @@ function processVerb(guildid, message, channelid, messageauthorid, gameKeysInThi
                             });
 
                             stream.on("finish", function() {
-                                console.log("done");
+
                             });
                         });
                     }
-
-                    //https://github.com/nodejs/node/issues/23033
-
-                    // function GetFileEncodingHeader(filePath) {
-                    //     const readStream = fs.openSync(filePath, 'r');
-                    //     const bufferSize = 2;
-                    //     const buffer = new Buffer(bufferSize);
-                    //     let readBytes = 0;
-                    
-                    //     if (readBytes = fs.readSync(readStream, buffer, 0, bufferSize, 0)) {
-                    //         const header = buffer.slice(0, readBytes).toString("hex");
-                    
-                    //         if (header === "fffe") {
-                    //             return "utf16le";
-                    //         } else if (header === "feff") {
-                    //             return "utf16be";
-                    //         } else if (header.startsWith("ff") || header.startsWith("fe") || header.startsWith("ef")) {
-                    //             return "utf8";
-                    //         }
-                    //     }
-                    
-                    //     return "";
-                    // }
-                    
-                    // function ReadFileSync(filePath, desiredEncoding) {
-                    //     if (!desiredEncoding || desiredEncoding == null || desiredEncoding === "undefined") {
-                    //         return fs.readFileSync(filePath);
-                    //     } else if (desiredEncoding === "binary" || desiredEncoding === "hex") {
-                    //         return fs.readFileSync(filePath, desiredEncoding);
-                    //     }
-                    
-                    //     const fileEncoding = GetFileEncodingHeader(filePath);
-                    //     let fileEncodingBytes = 0;
-                    //     let content = null;
-                    
-                    //     if (desiredEncoding === "ucs2") {
-                    //         desiredEncoding = "utf16le";
-                    //     } else if (desiredEncoding === "ascii") {
-                    //         desiredEncoding = "utf8";
-                    //     }
-                    
-                    //     if (fileEncoding === "utf16le" || fileEncoding === "utf16be") {
-                    //         fileEncodingBytes = 2;
-                    //         content = fs.readFileSync(filePath, "ucs2"); // utf-16 Little Endian
-                    
-                    //         if (desiredEncoding != fileEncoding && desiredEncoding !== "default" &&
-                    //             !(fileEncoding == "utf16le" && desiredEncoding === "utf8")) {
-                    
-                    //             content = content.swap16();
-                    //         }
-                    //     } else {
-                    //         if (fileEncoding === "utf8") {
-                    //             fileEncodingBytes = 1;
-                    //         }
-                    
-                    //         content = fs.readFileSync(filePath, "utf8");
-                    //     }
-                    
-                    //     if (desiredEncoding === "default") {
-                    //         return content; // Per documentation, no encoding means return a raw buffer.
-                    //     }
-                    
-                    //     return content.toString(desiredEncoding, fileEncodingBytes);
-                    // }
-                    
-
-                    // //https://github.com/nodejs/node/issues/23033
-                    // function GetJson(filePath) {
-                    //     const jsonContents = ReadFileSync(filePath, "utf16be");
-                    //     console.log(GetFileEncodingHeader(filePath));
-                    
-                    //     return JSON.parse(jsonContents);
-                    // }
 
                     try {
                         const tempfilename = first.id + '.download';
 
                         downloads(first.url, tempfilename,
                             function (wut) {
-                            console.log('first.url, tempfilename', first.url, tempfilename);
-                            
-                            //var downloaded = GetJson(tempfilename);
-                            //var downloaded = fs.readFileSync(tempfilename);
                             var downloaded = new TextDecoder('utf-16le').decode(fs.readFileSync(tempfilename));
-                            //var downloaded21 = new TextDecoder('utf-16').decode(fs.readFileSync(tempfilename));
-                            //console.log('downloaded.toString()', downloaded.toString());
-                            //const one = JSON.stringify(downloaded.toString());
-                            //const two = JSON.parse(one);
-                            //const dataObj = two;
 
                             const updateObj = {};
                             updateObj[setting_name] = downloaded;
@@ -1384,9 +1371,6 @@ function processVerb(guildid, message, channelid, messageauthorid, gameKeysInThi
             
             try {
                 saveSettingObj[setting_name] = parsedMessage.settingStuff.join(' ');
-                //if (JSON.stringify(saveSettingObj) !== JSON.stringify(JSON.parse(JSON.stringify(saveSettingObj)))) {
-                //    throw 'invalid setting';
-                //}
 
                 repo.dbUpdateSetting(guildid, messageauthorid, saveSettingObj);
 
@@ -1419,29 +1403,15 @@ function processVerb(guildid, message, channelid, messageauthorid, gameKeysInThi
                 const messageauthorsgame = existingGame.filter(f => f.key === repo.dbMakeKey(guildid, messageauthorid, channelid))[0];
 
                 if (typeof messageauthorsgame.data === 'undefined') messageauthorsgame.data = [];
-                /*if (parsedMessage.infoThing.toLowerCase() === 'clear') {parsedMessage.infoThing = '';};*/
 
                 var infoThing = messageauthorsgame.data.join('');
                 if (parsedMessage.infoThing !== null && parsedMessage.infoThing.length > 0) {
                     infoThing = parsedMessage.infoThing;
                 }
-
-                //repo.dbUpdateForUser(guildid, messageauthorid, channelid, { data: messageauthorsgame.data });
-
-                /* 
-                  
-                    How to show the info?????
-                  
-                 */
                 
                 chessyInfo(guildid, channelid, messageauthorid, infoThing, existingGame[0].chessjs, message.channel)
                     .then(t => showBoard(guildid, messageauthorid, message.channel, messageauthorsgame, emoji_board_toolkit))
                     .catch(console.log);
-                //showInfo(guildid, message.channel, messageauthorsgame, messageauthorid, infoThing);
-
-
-                //chessyInfo(guildid, channelid, messageauthorid, gameKeysInThisChannel, parsedMessage.infoThing, existingGame[0].chessjs, message.channel)
-                //    .catch(console.log);
             }                        
             break;
 
@@ -1494,185 +1464,228 @@ function startBot() {
             bot.login(auth.token);
 
             bot.on('ready', function () {
-                logger.info('Connected');
-                logger.info('Logged in as: ');
-                logger.info(bot.username + ' - (' + bot.id + ')');
+                try {
+                    logger.info('Connected');
+                    logger.info('Logged in as: ');
+                    logger.info(bot.username + ' - (' + bot.id + ')');
 
-                bot.guilds.forEach(function (f) { repo.dbMakeDb(f.id); console.log('!ready:', f.id);});
+                    bot.guilds.forEach(function (f) { repo.dbMakeDb(f.id); console.log('!ready:', f.id);});
+                } catch (err) {
+                    console.log('ready', err);
+                }
             });
 
+            bot.setInterval(function() {
+                try {
+                    const gamesBeingPlayed = repo.dbGetGameCount();
+                    bot.user.setActivity(gamesBeingPlayed + ' idiototic games');
+                } catch (err) {
+                    console.log('bot.setInterval(...)', err);
+                }
+            }, 60 * 1000);
+
             bot.on('messageReactionAdd', function (reaction, user) {
-                if (user.id === bot.user.id) {
-                    return;
-                }
-                if (reaction.message.author.id !== bot.user.id) {
-                    return;
-                }
-
-                const guildid = reaction.message.channel.guild.id;
-                const userid = user.id;
-                const channelid = reaction.message.channel.id;
-                
-                console.log('messageReactionAdd', guildid);
-
-                const authorKeys = repo.dbGetGameKeysForUser(guildid, userid, channelid);
-                if (authorKeys.length === 0) {
-
-                    return;
-                }
-
-                const authorGame = repo.dbGetGame(guildid, authorKeys);
-                const isTarget = authorGame[0].targetid === userid;
-                const isWhite = (!isTarget && authorGame[0].isWhite) || !authorGame[0].isWhite;
-
-                const reactionEmojiName = reaction.emoji.name;
-                const isAcceptance = reactionEmojiName == EMOJI_ACCEPT_GAME;
-                const isRejection = reactionEmojiName == EMOJI_REJECT_GAME;
-
-                if (isTarget && authorGame[0].state == NS_INVITED && (isAcceptance || isRejection)) {
-                    reactGameInvite(guildid, reaction.message.channel, userid, authorGame[0].authorid, isAcceptance, !authorGame[0].isWhite)
-                        .catch(console.log);
+                try {
+                    if (user.id === bot.user.id) {
                         return;
-                }
+                    }
+                    if (reaction.message.author.id !== bot.user.id) {
+                        return;
+                    }
 
-                const isauthnext = isAuthorNext(guildid, authorGame[0].authorid, authorGame[0].targetid, channelid);
-                const ourGoNext = (
-                    (authorGame[0].authorid === userid && isauthnext) || 
-                    (authorGame[0].targetid === userid && !isauthnext)
-                );                
+                    const guildid = reaction.message.channel.guild.id;
+                    const userid = user.id;
+                    const channelid = reaction.message.channel.id;
+                    
+                    const authorKeys = repo.dbGetGameKeysForUser(guildid, userid, channelid);
+                    if (authorKeys.length === 0) {
 
-                if (!ourGoNext) {
-                    return
-                }
+                        return;
+                    }
 
-                if (authorGame[0].state === NS_ACCEPTED) {
-                    const reactorGame = repo.dbGetForUserKey(guildid, userid, channelid)[0];
-                    const haveSelection =  typeof reactorGame.data !== 'undefined';// OBTW selected items means theres a thing in the data array TLDR
+                    const authorGame = repo.dbGetGame(guildid, authorKeys);
+                    const isTarget = authorGame[0].targetid === userid;
+                    const isWhite = (!isTarget && authorGame[0].isWhite) || !authorGame[0].isWhite;
+
+                    const reactionEmojiName = reaction.emoji.name;
+                    const isAcceptance = reactionEmojiName == EMOJI_ACCEPT_GAME;
+                    const isRejection = reactionEmojiName == EMOJI_REJECT_GAME;
+
+                    if (isTarget && authorGame[0].state == NS_INVITED && (isAcceptance || isRejection)) {
+                        reactGameInvite(guildid, reaction.message.channel, userid, authorGame[0].authorid, isAcceptance, !authorGame[0].isWhite, authorGame[0].fenStuff, authorGame[0].pgnStuff)
+                            .catch(console.log);
+                            return;
+                    }
+
+                    const isauthnext = isAuthorNext(guildid, authorGame[0].authorid, authorGame[0].targetid, channelid);
+                    const ourGoNext = (
+                        (authorGame[0].authorid === userid && isauthnext) || 
+                        (authorGame[0].targetid === userid && !isauthnext)
+                    );                
+
+                    if (!ourGoNext) {
+                        return
+                    }
+
+                    /*LOGGING*/
+                    {
+                        console.log('message reaction', guildid, channelid, authorGame[0].authorid , authorGame);
+                    }
+
+                    if (authorGame[0].state === NS_ACCEPTED) {
+                        const reactorGame = repo.dbGetForUserKey(guildid, userid, channelid)[0];
+                        const haveSelection =  typeof reactorGame.data !== 'undefined';// OBTW selected items means theres a thing in the data array TLDR
+        
+                        // if game is in flow and we're dealing with selected pieces
+                        var isProcessed = false;
+                        switch (reactionEmojiName) {
+                            case EMOJI_SHOW_LETTERS:
+                                const letters = haveSelection
+                                    ? getLettersNumbersForValidMoves(reactorGame.data.join(''), authorGame[0], isWhite)[0]
+                                    : emoji_navigation_letters;
+                                                
+                                addEmojiArray(guildid, reaction.message, emoji_navigation_letters, (t) => letters.includes(t))
+                                    //.then(t => addEmojiArray(guildid, reaction.message, [ EMOJI_SHOW_NUMBERS ]))
+                                    .catch(console.log);
+
+                                isProcessed = true;
+                                break;
+
+                            case EMOJI_SHOW_NUMBERS:
+                                const numbers = haveSelection 
+                                    ? getLettersNumbersForValidMoves(reactorGame.data.join(''), authorGame[0], isWhite)[1]
+                                    : emoji_navigation_numbers;
+
+                                addEmojiArray(guildid, reaction.message, emoji_navigation_numbers, (t) => numbers.includes(t) )
+                                    .catch(console.log);
+                                isProcessed = true;
+                                break;
+
+                            case EMOJI_CLEARSELECTION:
+                                repo.dbUpdateForUser(guildid, userid, channelid, { data: [] });
+                                const passGame = repo.dbGetForUserKey(guildid, reactorGame.authorid, channelid)[0];
+                                showBoard(guildid, userid, reaction.message.channel, passGame, emoji_board_toolkit, null);
+                                isProcessed = true;
+                                break;
+
+                            case EMOJI_INFO:
+                                try
+                                {
+                                    const infoUserData = repo.dbGetForUserKey(guildid, userid, channelid)[0].data;
+                                    processVerb(guildid, reaction.message, channelid, userid, repo.dbGetGameKeysForUser(guildid, userid, channelid), {
+                                        verb: 'info',
+                                        infoThing: infoUserData,
+                                        userid: userid
+                                    });
+                                } catch(err) {
+                                    console.log('case EMOJI_INFO:', err);
+                                }
+                                isProcessed = true;
+                                break;
+
+                            case EMOJI_PRIZE:
+                                try
+                                {                                    
+                                    const hotGame = repo.dbGetForUserKey(guildid, reactorGame.authorid, channelid)[0];
+                                    const isWon = hotGame.chessjs.game_over() && !hotGame.chessjs.in_draw();
+                                    if (isWon) {
+                                        tellUsers(
+                                            guildid,
+                                            channelid, 
+                                            [ hotGame.authorid, hotGame.targetid ], 
+                                            ', WINNER GETS FUCKING PONY!!!1\nhttps://static.independent.co.uk/s3fs-public/thumbnails/image/2018/10/11/14/shetland-foal-pony.jpg\n\nPlease cancel the game manually (sorry - still wip)', 
+                                            EMOJI_PRIZE, 
+                                            reaction.message);
+
+                                        isProcessed = true;
+                                    }
+                                } catch(err) {
+                                    console.log('case EMOJI_PRIZE:', err);
+                                }
+                                isProcessed = true;
+                                break;
     
-                    // if game is in flow and we're dealing with selected pieces
-                    var isProcessed = false;
-                    switch (reactionEmojiName) {
-                        case EMOJI_SHOW_LETTERS:
-                            const letters = haveSelection
-                                ? getLettersNumbersForValidMoves(reactorGame.data.join(''), authorGame[0], isWhite)[0]
-                                : emoji_navigation_letters;
-                                               
-                            addEmojiArray(guildid, reaction.message, emoji_navigation_letters, (t) => letters.includes(t))
-                                //.then(t => addEmojiArray(guildid, reaction.message, [ EMOJI_SHOW_NUMBERS ]))
-                                .catch(console.log);
-
-                            isProcessed = true;
-                            break;
-
-                        case EMOJI_SHOW_NUMBERS:
-                            const numbers = haveSelection 
-                                ? getLettersNumbersForValidMoves(reactorGame.data.join(''), authorGame[0], isWhite)[1]
-                                : emoji_navigation_numbers;
-
-                            addEmojiArray(guildid, reaction.message, emoji_navigation_numbers, (t) => numbers.includes(t) )
-                                .catch(console.log);
-                            isProcessed = true;
-                            break;
-
-                        case EMOJI_CLEARSELECTION:
-                            repo.dbUpdateForUser(guildid, userid, channelid, { data: [] });
-                            const passGame = repo.dbGetForUserKey(guildid, reactorGame.authorid, channelid)[0];
-                            showBoard(guildid, userid, reaction.message.channel, passGame, emoji_board_toolkit, null);
-                            isProcessed = true;
-                            break;
-
-                        case EMOJI_INFO:
-                            try
-                            {
-                                const infoUserData = repo.dbGetForUserKey(guildid, userid, channelid)[0].data;
-                                processVerb(guildid, reaction.message, channelid, userid, repo.dbGetGameKeysForUser(guildid, userid, channelid), {
-                                    verb: 'info',
-                                    infoThing: infoUserData,
-                                    userid: userid
-                                });
-                            } catch(err) {
-                                console.log('case EMOJI_INFO:', err);
-                            }
-                            isProcessed = true;
-                            break;
+                        }
+                        if (isProcessed) {
+                            return;
+                        }
                     }
-                    if (isProcessed) {
-                        return;
+
+                    try {
+                        if (emoji_navigation_numbers.includes(reactionEmojiName) ) {
+                            processVerb(guildid, reaction.message, channelid, userid, repo.dbGetGameKeysForUser(guildid, userid, channelid), {
+                                verb: 'data',
+                                infoThing: (emoji_navigation_numbers.indexOf(reactionEmojiName)+1).toString(),
+                                userid: userid
+
+                            });
+                            return;
+                        } else if (emoji_navigation_letters.includes(reactionEmojiName) ) {
+                            processVerb(guildid, reaction.message, channelid, userid, repo.dbGetGameKeysForUser(guildid, userid, channelid), {
+                                verb: 'data',
+                                infoThing: letters[emoji_navigation_letters.indexOf(reactionEmojiName)],
+                                userid: userid
+                            });
+                            return;
+                        } 
+                    } catch(err) {
+                        console.log('message react, verb processing err', err);
                     }
+                } catch (err) {
+                    console.log('on message react', err);
                 }
-
-                if (emoji_navigation_numbers.includes(reactionEmojiName) ) {
-                    processVerb(guildid, reaction.message, channelid, userid, repo.dbGetGameKeysForUser(guildid, userid, channelid), {
-                        verb: 'data',
-                        infoThing: (emoji_navigation_numbers.indexOf(reactionEmojiName)+1).toString(),
-                        userid: userid
-
-                    });
-                    return;
-                } else if (emoji_navigation_letters.includes(reactionEmojiName) ) {
-                    processVerb(guildid, reaction.message, channelid, userid, repo.dbGetGameKeysForUser(guildid, userid, channelid), {
-                        verb: 'data',
-                        infoThing: letters[emoji_navigation_letters.indexOf(reactionEmojiName)],
-                        userid: userid
-                    });
-                    return;
-                } 
-                // else if (reactionEmojiName === EMOJI_INFO) {
-                //     processVerb(guildid, reaction.message, channelid, userid, repo.dbGetGameKeysForUser(guildid, userid, channelid), {
-                //         verb: 'info',
-                //         infoThing: letters[emoji_navigation_letters.indexOf(reactionEmojiName)],
-                //         userid: userid
-                //     });
-                //     return;
-                // }
-
             });
 
             bot.on('message', function (message) {
-                if (message.author.id === bot.user.id)
-                    return;
+                try {
+                    if (message.author.id === bot.user.id)
+                        return;
 
-                const botMentions = message.mentions.users.filter(m => m.id === bot.user.id).array();
+                    const botMentions = message.mentions.users.filter(m => m.id === bot.user.id).array();
 
-                const guildid = message.channel.guild.id;
-                const messageauthorid = message.author.id;
-                const channelid = message.channel.id;
+                    const guildid = message.channel.guild.id;
+                    const messageauthorid = message.author.id;
+                    const channelid = message.channel.id;
 
-                var isExpectedPlayer = false;
+                    var isExpectedPlayer = false;
 
-                // if this function is not applicable then get out of here ASAP, and don't clog up the indenting on your way out
-                if (/*typeof botMentions === 'undefined' || botMentions === null ||*/ botMentions.length === 0) {
-                    const anyGames = repo.dbIsAny(guildid, messageauthorid, channelid);
-                    if (anyGames) {
-                        const userWantsAutoReact = repo.dbGetSettingAutoReact(guildid, messageauthorid);
-                        if (userWantsAutoReact) {
-                            const quickCheckGames = repo.dbGetGame(guildid, repo.dbGetGameKeysForUser(guildid, messageauthorid, channelid));
-                            const whonext = whoIsNext(guildid, quickCheckGames[0].authorid, quickCheckGames[0].targetid, channelid);
-                            if (whonext.whonextid === messageauthorid) {
-                                isExpectedPlayer = true;
+                    // if this function is not applicable then get out of here ASAP, and don't clog up the indenting on your way out
+                    if (/*typeof botMentions === 'undefined' || botMentions === null ||*/ botMentions.length === 0) {
+                        const anyGames = repo.dbIsAny(guildid, messageauthorid, channelid);
+                        if (anyGames) {
+                            const userWantsAutoReact = repo.dbGetSettingAutoReact(guildid, messageauthorid);
+                            if (userWantsAutoReact) {
+                                const quickCheckGames = repo.dbGetGame(guildid, repo.dbGetGameKeysForUser(guildid, messageauthorid, channelid));
+                                const whonext = whoIsNext(guildid, quickCheckGames[0].authorid, quickCheckGames[0].targetid, channelid);
+                                if (whonext.whonextid === messageauthorid) {
+                                    isExpectedPlayer = true;
+                                }
                             }
                         }
+                        if (!isExpectedPlayer) {
+                            return;
+                        }
                     }
-                    if (!isExpectedPlayer) {
-                        return;
+
+                    const content = message.content;
+
+                    const allNonBotMentions
+                        = message.mentions.users
+                            .filter(m => m.id !== bot.user.id && m.id !== messageauthorid).array();
+
+                    const gameKeysInThisChannel = repo.dbGetGameKeysForUser(guildid, messageauthorid, channelid);
+
+                    const parsedMessage = parser.parseMessage(bot, messageauthorid, channelid, content, allNonBotMentions, gameKeysInThisChannel);
+
+                    console.log(parsedMessage, '<-------- on message');
+                    try {
+                        processVerb(guildid, message, channelid, messageauthorid, gameKeysInThisChannel, parsedMessage);
+                    } catch (err) {
+                        console.log('message', err);
                     }
+                } catch (err) {
+                    console.log('message', err);
                 }
-
-                const content = message.content;
-
-                console.log(messageauthorid, channelid, content, '<-------- on message');
-
-                const allNonBotMentions
-                    = message.mentions.users
-                        .filter(m => m.id !== bot.user.id && m.id !== messageauthorid).array();
-
-                const gameKeysInThisChannel = repo.dbGetGameKeysForUser(guildid, messageauthorid, channelid);
-
-                const parsedMessage = parser.parseMessage(bot, messageauthorid, channelid, content, allNonBotMentions, gameKeysInThisChannel);
-
-                console.log(parsedMessage, '<-------- on message');
-                processVerb(guildid, message, channelid, messageauthorid, gameKeysInThisChannel, parsedMessage);
-
             });
         } catch (err) {
             console.log('err:', err);
@@ -1706,10 +1719,10 @@ const url = require('url');
 const safeStringify = require('fast-safe-stringify');
 
 function resolveCode(code) {
-    if (code === 'unicorn') {
-        return '650762337208500295'; //idiot chess for stupids
-    }
-    return null;
+    const resolved = repo.dbResolveCode(code);
+    if (typeof resolved === 'undefined')
+        return null;
+    return resolved;
 }
 
 function adminDumpGames(bot, code, res, reqData) {
@@ -1748,7 +1761,6 @@ function adminSpeak(bot, code, res, reqData) {
     console.log('adminSpeak', reqData);
     const channel = bot.guilds.find(f => f.id == code).channels.filter(f => f.id == reqData.query.channelid).array();
     if (channel.length == 0) {
-        console.log('length===0', reqData);
         res.end('<html><body style="background-color:darkslategrey; color:burlywood"><div>' +
             'Failed - no channelid query string parameter specified'
             + '</div></body></html>');
@@ -1756,7 +1768,6 @@ function adminSpeak(bot, code, res, reqData) {
     }
 
     if (reqData.query.say === 'undefined') {
-        console.log('say === undefined', reqData);
         res.end('<html><body style="background-color:darkslategrey; color:burlywood"><div>' +
             'Failed - nothing to say, cant find say query string parameter'
             + '</div></body></html>');

@@ -8,8 +8,6 @@ function parseMessage(bot, messageuserid, channelid, content, allNonBotMentions,
     const errorStringMessage = content
         .replace(/\<\@\![0-9]+\>/g, '**blah blah**'); // remove mentions tags;
 
-    console.log(decodeMe);
-
     var verb = '';
     var target = (allNonBotMentions.length > 0)
         ? allNonBotMentions[0] //only one mention is acknoledged 
@@ -28,6 +26,8 @@ function parseMessage(bot, messageuserid, channelid, content, allNonBotMentions,
 
     /* fen mode */
     var fenStuff = null;
+    /* pgn mode */
+    var pgnStuff = null;
 
     /* setting mode */
     var settingStuff = [];
@@ -39,6 +39,7 @@ function parseMessage(bot, messageuserid, channelid, content, allNonBotMentions,
     var isListMode = false;
     var isInfoMode = false;
     var isFenMode = false;
+    var isPgnMode = false;
 
     var isWhite = true;
 
@@ -56,9 +57,6 @@ function parseMessage(bot, messageuserid, channelid, content, allNonBotMentions,
         if (cleantoken.length === 0)
             return;
 
-
-        console.log('cleantoken', cleantoken);
-
         const VERB_RETRY_SAFTY = 3; //don't exceed this number of retrys
         var retryCount = 0;
         do  {
@@ -73,6 +71,8 @@ function parseMessage(bot, messageuserid, channelid, content, allNonBotMentions,
                 }
             } else if (isFenMode) {
                 fenStuff.push(token);
+            } else if (isPgnMode) {
+                pgnStuff.push(token);
             } else if (isInfoMode) {
                 if (cleantoken === 'clear' || cleantoken === 'reset') {
                     cleantoken = null; //clears the selection
@@ -161,6 +161,17 @@ function parseMessage(bot, messageuserid, channelid, content, allNonBotMentions,
                     case 'fen':
                         isFenMode = true;
                         fenStuff = [];
+                        if (verb !== 'play') {
+                            verb = cleantoken;
+                        }
+                        break;
+
+                    case 'pgn':
+                        isPgnMode = true;
+                        pgnStuff = [];
+                        if (verb !== 'play') {
+                            verb = cleantoken;
+                        }
                         break;
 
                     case 'quit':
@@ -221,7 +232,8 @@ function parseMessage(bot, messageuserid, channelid, content, allNonBotMentions,
         isWhite,
         timeout, /* how many minuets to wait for the game challenge to be accepted */
         fenStuff, /* fen to load for game */
-
+        pgnStuff, /* pgn to load for game */
+        
         /* list */
         listThing, /* word after the word 'list' */
 
