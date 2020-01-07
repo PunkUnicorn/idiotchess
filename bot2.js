@@ -376,7 +376,7 @@ const EMOJI_SETTINGS = emoji_gear;
 
 const emoji_board_toolkit = [EMOJI_SHOW_LETTERS, EMOJI_SHOW_NUMBERS ];
 const emoji_board_toolkit_withselection = [EMOJI_SHOW_LETTERS, EMOJI_SHOW_NUMBERS, EMOJI_INFO, EMOJI_CLEARSELECTION ];
-const emoji_board_gameover = [ EMOJI_PRIZE ];
+const emoji_board_prize = [ EMOJI_PRIZE ];
 
 const emoji_navigation_numbers = [ emoji_1, emoji_2, emoji_3, emoji_4, emoji_5, emoji_6, emoji_7, emoji_8];
 const emoji_navigation_letters = [ emoji_a, emoji_b, emoji_c, emoji_d, emoji_e, emoji_f, emoji_g, emoji_h];
@@ -470,7 +470,7 @@ function isValidPiece(fen, piece) {
 }
 
 
-function showBoardAscii(guildid, requesterid, channel, existingGame, reactionArray, whonext, whoNextGame, haveSelection, haveData, dataStr, usefulState, isOver, overReason) {
+function showBoardAscii(guildid, requesterid, channel, existingGame, reactionArray, whonext, whoNextGame, haveSelection, haveData, dataStr, usefulState, isOver, isWon, overReason) {
     if (requesterid === null) {
         requesterid = whonext.whonextid;
     }
@@ -480,8 +480,8 @@ function showBoardAscii(guildid, requesterid, channel, existingGame, reactionArr
     var ascii = existingGame.chessjs.ascii();
 
     if (!whoNextGame[0].isWhite) {
-        const setting = repo.dbGetSettingAutoFlip(guildid, requesterid);
-        if (typeof setting === ' undefined') {
+        const setting = repo.dbGetSettingAutoFlip(guildid, whonext.whonextid);
+        if (typeof setting === 'undefined') {
             isFlipped = true;
         } else {
             isFlipped = setting;
@@ -528,7 +528,14 @@ function showBoardAscii(guildid, requesterid, channel, existingGame, reactionArr
         ? '\n' + overReason + '... ' 
         : '\n<@' + whonext.whonextid + '> to play... ' ;
 
-    if (additionalEmoji.length > 0 && !isOver) {        
+    if (isOver) {
+        //Message to say Thank you! please click (something) to end the game
+        //  pgn to get the pgn
+        //  this game will auto-close in 1 min
+        //  offer icon to close
+    }
+
+    if (additionalEmoji.length > 0 && !isOver) {
         return channel
             .send(board + dataStr + usefulState + whoPlayNext)
             .then(sentMessage => addEmojiArray(guildid, sentMessage, additionalEmoji))
@@ -538,7 +545,8 @@ function showBoardAscii(guildid, requesterid, channel, existingGame, reactionArr
     } else {
         return channel
             .send(board + dataStr + usefulState + whoPlayNext)
-            .then(sentMessage => addEmojiArray(guildid, sentMessage, isOver ? emoji_board_gameover : reactionArray));
+            .then(sentMessage => addEmojiArray(guildid, sentMessage, isOver ? (isWon ? emoji_board_prize : []) : reactionArray));
+
     }
 }
 
@@ -552,8 +560,8 @@ function makeEmojiBoard(guildid, userid, chessjs, isFlipped, boardName) {
     const board = repo.dbGetCustomDeck(guildid, userid, boardName);
 
     const result = [];
-    const spaceUnicode = '            ';////'　';//unicode character (different to normal space)
-    const spaceUnicode3 = '      ';////'　';//unicode character (different to normal space)
+    const spaceUnicode = '            ';//unicode spaces (different to normal space)
+    const spaceUnicode3 = '      ';;//unicode spaces (different to normal space)
 
     if (!isFlipped) {
         result.push(spaceUnicode3);
@@ -581,7 +589,9 @@ function makeEmojiBoard(guildid, userid, chessjs, isFlipped, boardName) {
         const start = isFlipped ? 7 : 0;
         const end = isFlipped ? 0 : 7;
         const step = isFlipped ? -1 : 1;
+
         for (var colIndex = start; true; colIndex += step) {
+
             if (isFlipped
                 ? colIndex < end
                 : colIndex > end)
@@ -592,6 +602,7 @@ function makeEmojiBoard(guildid, userid, chessjs, isFlipped, boardName) {
                 : yStagger ? board.white : board.black;
 
             const piece = chessjs.get(letters[colIndex] + rowNo.toString());
+
             if (piece === null) {
                 result.push(thisSquare);
             } else {
@@ -611,12 +622,13 @@ function makeEmojiBoard(guildid, userid, chessjs, isFlipped, boardName) {
     }
 
     if (isFlipped) {
-        for (var rowIndex = 0; rowIndex < 8; rowIndex++)
+        for (var rowIndex = 0; rowIndex < 8; rowIndex++) {
             loopThing(rowIndex, isFlipped);
-
+        }
     } else {
-        for (var rowIndex = 7; rowIndex >= 0; rowIndex--)
+        for (var rowIndex = 7; rowIndex >= 0; rowIndex--) {
             loopThing(rowIndex, isFlipped);
+        }
     }
 
     if (!isFlipped) {
@@ -627,7 +639,6 @@ function makeEmojiBoard(guildid, userid, chessjs, isFlipped, boardName) {
     for (var i = 0; i < 8; i++) {
         result.push(board.wallhorz);
     }
-
     result.push( board.wallplus);
     result.push('\n' );
 
@@ -636,7 +647,7 @@ function makeEmojiBoard(guildid, userid, chessjs, isFlipped, boardName) {
     if (!isFlipped) {
         result.push(spaceUnicode);
     } else {
-        result.push('　  ' /* idographic space - special width and a couple of tiny unicode space*/);
+        result.push('　  ' /*funny unicode spaces - special width and a couple of tiny unicode space*/);
     }
 
     if (!isFlipped) {
@@ -654,29 +665,49 @@ function makeEmojiBoard(guildid, userid, chessjs, isFlipped, boardName) {
     result.push('\n');
 
     if (isFlipped) {
-        return /*var ascii =*/ '\uFEFF' + result.join('\uFEFF');
-        return '\uFEFF' + spaceUnicode3 + esrever.reverse(ascii);
+        return '\uFEFF' + result.join('\uFEFF');
     } else {
         return '\uFEFF' + result.join('');
     }
 }
 
-// function showInfo(guildid, channel, messageauthorsgame, messageauthorid, infoThing) {
-//     return chessyInfo(guildid, channel.id, messageauthorid, infoThing, )
-// }
-
 function showBoard(guildid, requesterid, channel, existingGame, reactionArray, selected) {
     if (typeof selected === 'undefined') selected = null;
     if (typeof existingGame.chessjs === 'undefined' || existingGame.chessjs === null) return;
 
-    // is the game won?
-
     const chessjs = existingGame.chessjs;
     const isOver = chessjs.game_over();
     var overReason = ''
+    var isWon = false;
+
     if (isOver) {
-        if ( chessjs.in_checkmate() ) {
+/*      GAME OVER, MAN, GAME OVER. WHAT THE FUCK ARE WE SUPPOSED TO DO NOW?         
+        http://www.asciiartfarts.com/alien.html
+
+
+       __.,,------.._                                                        
+     ,'"   _      _   "`.                                                    
+    /.__, ._  -=- _"`    Y                                                   
+   (.____.-.`      ""`   j                                                   
+    VvvvvvV`.Y,.    _.,-'       ,     ,     ,                                
+        Y    ||,   '"\         ,/    ,/    ./                                
+        |   ,'  ,     `-..,'_,'/___,'/   ,'/   ,                             
+   ..  ,;,,',-'"\,'  ,  .     '     ' ""' '--,/    .. ..                     
+ ,'. `.`---'     `, /  , Y -=-    ,'   ,   ,. .`-..||_|| ..                  
+ff\\`. `._        /f ,'j j , ,' ,   , f ,  \=\ Y   || ||`||_..               
+l` \` `.`."`-..,-' j  /./ /, , / , / /l \   \=\l   || `' || ||...            
+ `  `   `-._ `-.,-/ ,' /`"/-/-/-/-"'''"`.`.  `'.\--`'--..`'_`' || ,          
+            "`-_,',  ,'  f    ,   /      `._    ``._     ,  `-.`'//         ,
+          ,-"'' _.,-'    l_,-'_,,'          "`-._ . "`. /|     `.'\ ,       |
+        ,',.,-'"          \=) ,`-.         ,    `-'._`.V |       \ // .. . /j
+        |f\\               `._ )-."`.     /|         `.| |        `.`-||-\\/ 
+        l` \`                 "`._   "`--' j          j' j          `-`---'  
+         `  `                     "`_,-','/       ,-'"  /                    
+                                 ,'",__,-'       /,, ,-'                     
+                                 Vvv'            VVv'                                       */
+        if ( chessjs.in_checkmate() ) { /*--------------------------------------------------*/
             overReason = 'Checkmate';
+            isWon = true;
         } else if (chessjs.in_stalemate()) {
              overReason = 'Stalemate';
         } else if (chessjs.in_draw()) {
@@ -729,7 +760,7 @@ function showBoard(guildid, requesterid, channel, existingGame, reactionArray, s
     }
 
 
-    return showBoardAscii(guildid, requesterid, channel, existingGame, reactionArray, whonext, whoNextGame, haveSelection, haveData, dataStr, usefulState, isOver, overReason);
+    return showBoardAscii(guildid, requesterid, channel, existingGame, reactionArray, whonext, whoNextGame, haveSelection, haveData, dataStr, usefulState, isOver, isWon, overReason);
 }
 
 function chessyInfo(guildid, channelid, messageauthorid, infoThing, chessjs, channel) {
@@ -771,7 +802,6 @@ function chessyInfo(guildid, channelid, messageauthorid, infoThing, chessjs, cha
 
     const infoString = '```' + pieceDateStr + moves + '```';
     return tellUser(guildid, channelid, messageauthorid, infoString, EMOJI_INFO);
-    //return channel.send('Info for **' + infoThing + '**:  ' + '```' + infoString + '\n' + moves + '```')
 }
 
 function reactGameInvite(guildid, channel, userid, authorid, isAcceptance, isWhite, fenStuff, pgnStuff) {
@@ -912,7 +942,8 @@ function processVerbData(guildid, message, channelid, messageauthorid, gameKeysI
             updateMe[0].data.join('').split('').forEach(function (val, index, array) {
                 if (index == 0) return;
                 if (index === array.length - 1 && index % 2 === 0) {
-                    //odd number, and last one, add to result array or it will get missed since otherwise this function takes chunks of two
+                    /*odd number, so add the last character to result array, or otherwise it 
+                      will get missed since otherwise this function takes chunks of two */
                     cleaned.push(val);
                 }
                 if (index % 2 === 0) return;
@@ -965,14 +996,15 @@ function processVerbData(guildid, message, channelid, messageauthorid, gameKeysI
         }
 
         if (piece.length > 1 && piece.length < 4) {
+
             /*
                  
-                Really needs a from: and to:, separater to data[]
+                Really needs a from: and to:, separater to just a single 'data[]'
  
             */
+
             // If the data is a valid piece, auto move
             if (isValidPiece(existingGame[0].chessjs.fen(), piece)) {
-                //if (existingGame[0].chessjs.get(piece) !== null) {
                 boardShow = true;
             }
 
@@ -1101,7 +1133,7 @@ function isAuthorNext(guildid, authorid, targetid, channelid) {
 
 function movePieceBoyakasha(guildid, channelid, userid, existingGame, cleanedMove, message) {
     const move = cleanedMove.move;
-    const restOfMessage = cleanedMove.restOfMessage;//.join(' ');
+    const restOfMessage = cleanedMove.restOfMessage;
 
     const chessjs = repo.dbGetForUserKey(guildid, existingGame.authorid, channelid)[0].chessjs;    
 
@@ -1176,30 +1208,33 @@ function getLettersNumbersForValidMoves(piece, existingGame, isWhite) {
     return [emojiLetters, emojiNumbers ];
 }
 
-function getEmojiListForBoard(guildid, existingGame, messageauthorid) {
-    const userGame = repo.dbGetForUserKey(guildid, messageauthorid, existingGame.channelid);
-    const userData = (typeof userGame === 'undefined')
-        ? [] 
-        : (typeof userGame.data === 'undefined')
-            ? [] 
-            : userGame.data;
+// function getEmojiListForBoard(guildid, existingGame, messageauthorid) {
+//     const userGame = repo.dbGetForUserKey(guildid, messageauthorid, existingGame.channelid);
+//     const userData = (typeof userGame === 'undefined')
+//         ? [] 
+//         : (typeof userGame.data === 'undefined')
+//             ? [] 
+//             : userGame.data;
 
-    const joined = userData.join('');
-    if (joined.length === 2) {
-        // const moves = getLettersNumbersForValidMoves(joined);
-        // const letters = moves[0];
-        // const numbers = moves[1];
+//     const joined = userData.join('');
+//     if (joined.length === 2) {
+//         // const moves = getLettersNumbersForValidMoves(joined);
+//         // const letters = moves[0];
+//         // const numbers = moves[1];
 
-        /* temp, instead return letters and numbers they can move with for this piece */ return emoji_board_toolkit_withselection;
+//         /* temp, instead return letters and numbers they can move with for this piece */ 
+//         return emoji_board_toolkit_withselection;
 
-    } else {
-        return emoji_board_toolkit;
-    }
-}
+//     } else {
+//         return emoji_board_toolkit;
+//     }
+// }
 
 function isValidSettingName(setting_name) {
     const validNameRegex = /^[a-z0-9]+$/g;
-    if (typeof setting_name === 'undefined' || setting_name === null || setting_name.length === 0) return false;
+    if (typeof setting_name === 'undefined' || setting_name === null || setting_name.length === 0) {
+        return false;
+    }
     return setting_name.match(validNameRegex);
 }
 
@@ -1229,52 +1264,51 @@ function processVerb(guildid, message, channelid, messageauthorid, gameKeysInThi
             break;
 
         case 'help':
-            //if (gameKeysInThisChannel.length === 0) {
-                var page = '1';
-                if (parsedMessage.restOfMessage.length > 0) {
-                    var page = parsedMessage.restOfMessage.join(' ');                    
-                }
-                const helpText1 = 
-                    '\n> `@idiotchess play @<your friend>`' 
-                    + '\nor to continue a game:'
-                    + '\n> `@idiotchess play @<your friend> [timeout <number of mins. (default is one min)>] [fen <chess FEN mumbo jumbo here>]`'
-                    + '\n' + 'e.g.\n'
-                    + '\n> `@idiotchess play @BestBuddy`'
-                    + '\nor to continue a game:'
-                    + '\n> `@idiotchess play @Topalov fen rnbqkbnr/pp1ppppp/8/2p5/4P3/8/PPPP1PPP/RNBQKBNR w KQkq c6 0 2`'
-                    + '\n\n' + 'Whilst playing you can save the game using the `fen` command, and continue it later:\n> ```@idiotchess fen```\nThis gives you the chess FEN code for the current board setup, and who plays next.';
-                const helpText2 = 
-                    'While in play:\n\n> `@diotchess board`\n> `@idiotchess select <piece>`\n> `@idiotchess info [<piece>]`\n> `@idiotchess move <piece ref>`';
+            var page = '1';
+            if (parsedMessage.restOfMessage.length > 0) {
+                var page = parsedMessage.restOfMessage.join(' ');                    
+            }
+            const helpText1 = 
+                '\n> `@idiotchess play @<your friend>`' 
+                + '\nor to continue a game:'
+                + '\n> `@idiotchess play @<your friend> [fen <chess FEN mumbo jumbo here>]`'
+                + '\n' + 'e.g.\n'
+                + '\n> `@idiotchess play @BestBuddy`'
+                + '\nor to continue a game:'
+                + '\n> `@idiotchess play @Topalov fen rnbqkbnr/pp1ppppp/8/2p5/4P3/8/PPPP1PPP/RNBQKBNR w KQkq c6 0 2`'
+                + '\n\n' + 'Whilst playing you can save the game using the `fen` command, and continue it later:\n> ```@idiotchess fen```\nThis gives you the chess FEN code for the current board setup, and who plays next.';
+            const helpText2 = 
+                'While in play:\n\n> `@diotchess board`\n> `@idiotchess select <piece>`\n> `@idiotchess info [<piece>]`\n> `@idiotchess move <piece ref>`';
 
-                const helpText3 = 
-                    'Also:\n\n> `@idiotbot get [<variable name>]`\n> `@idiotchess set <variable name> <value>`'
-                    + '\n\nWith the variable `boardtype` it\'s possible for you to create your own emoji board...\nenjoy!';
+            const helpText3 = 
+                'Also:'+
+                + '\n\n> `@idiotchess play @<your friend> [timeout <number of mins. (default is one min)>] [fen <chess FEN mumbo jumbo here>]`'
+                + '\n\n> `@idiotbot get [<variable name>]`\n> `@idiotchess set <variable name> <value>`'                
+                + '\n\nWith the variable `boardtype` it\'s possible for you to create your own emoji board...\n...*enjoy!*';
 
-                var finalText = helpText1;
-                switch (page) {
-                    case '3':
-                    case 'third':
-                    case '3rd':
-                        finalText = [helpText1, helpText2, helpText3].join('\n\n');
-                        break;
+            var finalText = helpText1;
+            switch (page) {
+                case '3':
+                case 'third':
+                case '3rd':
+                    finalText = [helpText1, helpText2, helpText3].join('\n\n') + '\n';
+                    break;
 
-                    case '2':
-                    case 'second':
-                    case '2nd':
-                        finalText = [helpText1, helpText2, '@idiotchess `help third` for the next'].join('\n\n');
-                        break;
+                case '2':
+                case 'second':
+                case '2nd':
+                    finalText = [helpText1, helpText2, '@idiotchess `help third` for the next'].join('\n\n') + '\n';
+                    break;
 
-                    case '1':
-                    case 'first':
-                    case '1st':
-                    default:
-                        finalText = [helpText1, '@idiotchess `help second` for the next'].join('\n\n');
-                        break;
-                }
-                tellUser(guildid, channelid, messageauthorid, finalText, emoji_speakinghead, message )
-                    .catch(console.log);
-
-            //}
+                case '1':
+                case 'first':
+                case '1st':
+                default:
+                    finalText = [helpText1, '@idiotchess `help second` for the next'].join('\n\n') + '\n';
+                    break;
+            }
+            tellUser(guildid, channelid, messageauthorid, finalText, emoji_speakinghead, message )
+                .catch(console.log);
 
             break;
 
@@ -1318,7 +1352,6 @@ function processVerb(guildid, message, channelid, messageauthorid, gameKeysInThi
                 if (Object.keys(ourGettings).length) {
                     Object.keys(ourGettings).forEach(key => {
                         if (!isValidSettingName(key)) return;
-                        //endMessageParts.push('\n  - Setting `' + key + '` is:\n```' + ourGettings[key] + '```');
                         endMessageParts.push(' - Setting `' + key + '`');
                     });
                 }
