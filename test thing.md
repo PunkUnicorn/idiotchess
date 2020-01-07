@@ -1,0 +1,5 @@
+- Make sure game is playable to the finish
+- Advertise for beta testers
+- Give custom role (w/ no priv
+- ????
+- PROFIT
