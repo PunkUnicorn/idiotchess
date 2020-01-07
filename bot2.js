@@ -132,12 +132,22 @@ function reOpenGameNegociation(guildid, message, channelid, messageauthorid, tar
 }
 
 function openGameNegociation(guildid, message, channelid, messageauthorid, targetid, invitetimeoutmins, iswhite, fenStuff, pgnStuff) {
+    var targetname = message.channel.guild.members.find(f => f.id === targetid).nickname;
+    targetname = targetname === null
+        ? message.channel.guild.members.find(f => f.id === targetid).user.username
+        : targetname;
 
-    return message.react(love_letter)
+    var authorname = message.channel.guild.members.find(f => f.id === messageauthorid).nickname;
+    authorname = authorname === null
+        ? message.channel.guild.members.find(f => f.id === messageauthorid).user.username
+        : authorname;
+
+        return message.react(love_letter)
         .then(function (reaction) {
             // Invite message
             message.channel
-                .send('<@!' + targetid + '> You have been challenged by <@!' + messageauthorid + '>, do you accept?')
+                //.send('<@!' + targetid + '> You have been challenged by <@!' + messageauthorid + '>, do you accept?')
+                .send(targetname + ' you have been challenged by '+ authorname + ', do you accept?')
                 .then(function (challengeMessage) {
 
                     // OK accept emojii
@@ -480,7 +490,7 @@ function showBoardAscii(guildid, requesterid, channel, existingGame, reactionArr
     var ascii = existingGame.chessjs.ascii();
 
     if (!whoNextGame[0].isWhite) {
-        const setting = repo.dbGetSettingAutoFlip(guildid, whonext.whonextid);
+        const setting = repo.dbGetSettingAutoFlip(guildid, requesterid);
         if (typeof setting === 'undefined') {
             isFlipped = true;
         } else {
@@ -530,9 +540,14 @@ function showBoardAscii(guildid, requesterid, channel, existingGame, reactionArr
 
     if (isOver) {
         //Message to say Thank you! please click (something) to end the game
+        const overMsg = 'Thank you for using the idiotchess bot.' + isWon ? ' And congratulations to the winner!' : '';
+        tellUsers(guildid, channel.id, [whoNextGame[0].authorid, whoNextGame[0].targetid], overMsg, emoji_ribbon);
         //  pgn to get the pgn
         //  this game will auto-close in 1 min
         //  offer icon to close
+        //or just delete the game
+        repo.dbRemoveGame(guildid, userid, channel.id);
+        repo.dbDecrementGameCount();
     }
 
     if (additionalEmoji.length > 0 && !isOver) {
@@ -843,7 +858,7 @@ function reactGameInvite(guildid, channel, userid, authorid, isAcceptance, isWhi
         }
 
         return channel.send("It's ON! ")
-            .then(t => showBoard(guildid, authorid, channel, repo.dbGetForUserKey(guildid, authorid, channelid)[0], emoji_board_toolkit));
+            .then(t => showBoard(guildid, null, channel, repo.dbGetForUserKey(guildid, authorid, channelid)[0], emoji_board_toolkit));
 
     } else {
         return tellUserOfCancel(guildid, channelid, userid, { deleteIt: true });        
@@ -1014,7 +1029,7 @@ function processVerbData(guildid, message, channelid, messageauthorid, gameKeysI
             boardShow = true;
         }
         if (boardShow) {
-            showBoard(guildid, messageauthorid, message.channel, existingGame[0], emoji_board_toolkit, piece)
+            showBoard(guildid, null, message.channel, existingGame[0], emoji_board_toolkit, piece)
                 .catch(console.log);
         }
     }
@@ -1154,7 +1169,7 @@ function movePieceBoyakasha(guildid, channelid, userid, existingGame, cleanedMov
             const possibleMoves = chessjs.moves({ square: firstPiece, verbose: true  }).map(m => m.to);
             extraInfo = possibleMoves.length > 0
                 ? '\n' + 'Valid moves for ' + firstPiece + ': ' + firstPiece + '-*' + possibleMoves.join('*, ' + firstPiece + '-*') + '*'
-                : restOfMessage;
+                : (move === restOfMessage ? '' : restOfMessage);
         }
 
         return tellUser(guildid, channelid, userid, ', sorry unable to move ' + move + extraInfo + exclamation, exclamation, message)
@@ -1503,6 +1518,27 @@ function processVerb(guildid, message, channelid, messageauthorid, gameKeysInThi
             }                        
             break;
 
+        case 'resign':
+            if (isExistingGame) {
+                if (existingGame[0].state === NS_ACCEPTED) {
+                    //const whonextid = whoIsNext(guildid, existingGame[0].authorid, existingGame[0].targetid, channelid).whonextid;
+                    //if (whonextid === messageauthorid) {
+                    //    return tellUser(guildid, channelid, messageauthorid, ', sorry it\'s not your move yet.', anger, message);
+                    //}
+                    var itsname = message.channel.guild.members.find(f => f.id === messageauthorid).nickname;
+                    itsname = itsname === null
+                        ? message.channel.guild.members.find(f => f.id === messageauthorid).user.username
+                        : itsname;
+
+                    const overMsg = ', ' + itsname + ' has resigned.';
+                    tellUsers(guildid, message.channel.id, [existingGame[0].authorid, existingGame[0].targetid], overMsg, emoji_handshake);
+                    
+                    repo.dbRemoveGame(guildid, messageauthorid, message.channel.id);
+                    repo.dbDecrementGameCount();                
+                }
+            }
+            break;
+
         case 'board':
             if (isExistingGame) {
                 showBoard(guildid, messageauthorid, message.channel, existingGame[0], emoji_board_toolkit)
@@ -1517,6 +1553,14 @@ function processVerb(guildid, message, channelid, messageauthorid, gameKeysInThi
                     if (cleanMoveData.error) {
                         tellUser(guildid, channelid, messageauthorid, '"' + existingGame[0].restOfMessage + '" move not recognised', anger, message.channel)
                             .catch(console.log);
+                        return;
+                    }
+
+                    if (cleanMoveData.move.length === 2 
+                        && existingGame.filter(f => f.key === repo.dbMakeKey(guildid, messageauthorid, channelid)[0].data)) {
+                        //process this as data
+                        parsedMessage.infoThing = [ cleanMoveData.move ];
+                        processVerbData(guildid, message, channelid, messageauthorid, gameKeysInThisChannel, parsedMessage, existingGame, isExistingGame);
                         return;
                     }
                     movePieceBoyakasha(guildid, channelid, messageauthorid, existingGame[0], cleanMoveData, message)
