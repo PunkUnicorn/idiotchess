@@ -506,7 +506,7 @@ function showBoardAscii(guildid, requesterid, channel, existingGame, reactionArr
         case '1default2':
         case '1default3':
         default:
-            board = makeEmojiBoard(guildid, requesterid, existingGame.chessjs, isFlipped, boardName);
+            board = makeEmojiBoard(guildid, channel, requesterid, existingGame.chessjs, isFlipped, boardName);            
             break;
 
         case 'ascii':
@@ -565,15 +565,285 @@ function showBoardAscii(guildid, requesterid, channel, existingGame, reactionArr
     }
 }
 
+function showPartialBigBoardEnd(guildid, channel, userid, chessjs, isFlipped, board, lineNoStart) {
+    const buf = Buffer.alloc(126, 0, 'utf-16le');
+    var len = 0;
+    // len += buf.write(board.white, len, 'utf-16le');
+    // len += buf.write(board.black, len, 'utf-16le');
+    // len += buf.write(board.white, len, 'utf-16le');
+    // len += buf.write(board.black, len, 'utf-16le');
+    // len += buf.write(board.white, len, 'utf-16le');
+    // len += buf.write(board.black, len, 'utf-16le');
+
+    //const result = [];
+    //const spaceUnicode = '            ';//unicode spaces (different to normal space)
+    //const spaceUnicode3 = '      ';;//unicode spaces (different to normal space)
+
+    //if (!isFlipped) {
+    //    result.push(spaceUnicode3);
+    //}
+    const keys = [board['key1'], board['key2'], board['key3'], board['key4'], board['key5'], board['key6'], board['key7'], board['key8']];
+    const letterKeys = [board.keya, board.keyb, board.keyc, board.keyd, board.keye, board.keyf, board.keyg, board.keyh];
+
+
+    len += buf.write(board.key1, len, 'utf-16le');
+
+    var rowNo=0;
+    for (var colIndex=0; colIndex < 8; colIndex++ ) {        
+        const thisSquare = (colIndex === 0 || colIndex % 2 === 0) ? board.black : board.white;
+        const piece = chessjs.get(letters[colIndex] + (rowNo+1).toString());
+
+        if (piece === null) {
+            len += buf.write(thisSquare, len, 'utf-16le');
+        } else {
+            len += buf.write(board[piece.color === 'w' ? piece.type.toUpperCase() : piece.type], len, 'utf-16le');
+        }
+    }
+    len += buf.write(board.key1, len, 'utf-16le');
+
+    len += buf.write('\n', len, 'utf-16le');
+
+
+    len += buf.write(board.wallplus, len, 'utf-16le');
+//    len += buf.write('🇦', len, 'utf-16le');
+    for (var i = 0; i < 8; i++) { 
+        //const encoded = new TextEncoder('utf-16le').encod(letterKeys[i]);
+        //const decoded = new TextDecoder('utf-16le').decode(letterKeys[i]);
+        len += buf.write('\uFEFF'+ letterKeys[i], len, 'utf-16le');
+        //len += buf.write( letterKeys[i], len);
+    }
+    len += buf.write(board.wallplus, len, 'utf-16le');
+    
+    return channel.send(buf.toString('utf-16le', 0, len));
+
+}
+
+function showPartialBigBoardStart(guildid, channel, userid, chessjs, isFlipped, board, lineNoStart) {
+    const buf = Buffer.alloc(126, 0, 'utf-16le');
+    var len = 0;
+
+    const keys = [board['key1'], board['key2'], board['key3'], board['key4'], board['key5'], board['key6'], board['key7'], board['key8']];
+    const letterKeys = [board.keya, board.keyb, board.keyc, board.keyd, board.keye, board.keyf, board.keyg, board.keyh];
+    len += buf.write(board.wallplus, len, 'utf-16le');
+    for (var i = 0; i < 8; i++) { 
+        len += buf.write('\uFEFF'+ letterKeys[i], len, 'utf-16le');
+    }
+    len += buf.write(board.wallplus, len, 'utf-16le');
+    
+    len += buf.write('\n', len, 'utf-16le');
+
+    len += buf.write(board.key8, len, 'utf-16le');
+
+    var rowNo=7;
+    for (var colIndex=0; colIndex < 8; colIndex++ ) {        
+        const thisSquare = (colIndex === 0 || colIndex % 2 === 0) ? board.white : board.black;
+        const piece = chessjs.get(letters[colIndex] + (rowNo+1).toString());
+
+        if (piece === null) {
+            len += buf.write(thisSquare, len, 'utf-16le');
+        } else {
+            len += buf.write(board[piece.color === 'w' ? piece.type.toUpperCase() : piece.type], len, 'utf-16le');
+        }
+    }
+    len += buf.write(board.key8, len, 'utf-16le');
+    return channel.send(buf.toString('utf-16le', 0, len));
+}
+
+// function showPartialBigBoard2(guildid, channel, userid, chessjs, isFlipped, board, lineNoStart) {
+//     const buf = Buffer.alloc(126, 0, 'utf-16le');
+//     var len = 0;
+//     const keys = [board['key1'], board['key2'], board['key3'], board['key4'], board['key5'], board['key6'], board['key7'], board['key8']];
+//     const letterKeys = [board.keya, board.keyb, board.keyc, board.keyd, board.keye, board.keyf, board.keyg, board.keyh];
+
+//     len += buf.write(board.key2, len, 'utf-16le');
+
+//     var rowNo=6;
+//     for (var colIndex=0; colIndex < 8; colIndex++ ) {        
+//         const thisSquare = (colIndex === 0 || colIndex % 2 === 0) ? board.white : board.black;
+//         const piece = chessjs.get(letters[colIndex] + (rowNo+1).toString());
+
+//         if (piece === null) {
+//             len += buf.write(thisSquare, len, 'utf-16le');
+//         } else {
+//             len += buf.write(board[piece.color === 'w' ? piece.type.toUpperCase() : piece.type], len, 'utf-16le');
+//         }
+//     }
+//     len += buf.write(board.key2, len, 'utf-16le');
+//     len += buf.write('\n', len, 'utf-16le');
+
+//     len += buf.write(board.key3, len, 'utf-16le');
+//     var rowNo=5;
+//     for (var colIndex=0; colIndex < 8; colIndex++ ) {        
+//         const thisSquare = (colIndex === 0 || colIndex % 2 === 0) ? board.white : board.black;
+//         const piece = chessjs.get(letters[colIndex] + (rowNo+1).toString());
+
+//         if (piece === null) {
+//             len += buf.write(thisSquare, len, 'utf-16le');
+//         } else {
+//             len += buf.write(board[piece.color === 'w' ? piece.type.toUpperCase() : piece.type], len, 'utf-16le');
+//         }
+//     }
+//     len += buf.write(board.key3, len, 'utf-16le');
+
+//     return channel.send(buf.toString('utf-16le', 0, len));
+// }
+
+function showPartialBigBoardGeneral(guildid, channel, userid, chessjs, isFlipped, board, keysRequired, rowNos) {
+    // const keys = [board.key4, board.key5];
+    // const rowNos = [8,9];
+
+    const buf = Buffer.alloc(126, 0, 'utf-16le');
+    var len = 0;
+    const keys = [board['key1'], board['key2'], board['key3'], board['key4'], board['key5'], board['key6'], board['key7'], board['key8']];
+    const letterKeys = [board.keya, board.keyb, board.keyc, board.keyd, board.keye, board.keyf, board.keyg, board.keyh];
+
+    len += buf.write(keysRequired[0], len, 'utf-16le');
+
+    var rowNo=rowNos[0];
+    
+    var yStagger = rowNo == 0 || rowNo % 2 == 0;
+
+    for (var colIndex=0; colIndex < 8; colIndex++ ) {        
+        //const thisSquare = (colIndex === 0 || colIndex % 2 === 0) ? board.white : board.black;
+
+        const thisSquare = (colIndex === 0 || colIndex % 2 === 0)
+            ? yStagger ? board.black : board.white
+            : yStagger ? board.white : board.black;
+
+        const piece = chessjs.get(letters[colIndex] + (rowNo+1).toString());
+
+        if (piece === null) {
+            len += buf.write(thisSquare, len, 'utf-16le');
+        } else {
+            len += buf.write(board[piece.color === 'w' ? piece.type.toUpperCase() : piece.type], len, 'utf-16le');
+        }
+    }
+    len += buf.write(keysRequired[0], len, 'utf-16le');
+    len += buf.write('\n', len, 'utf-16le');
+
+    yStagger = !yStagger;
+    len += buf.write(keysRequired[1], len, 'utf-16le');
+    var rowNo=rowNos[1];
+    for (var colIndex=0; colIndex < 8; colIndex++ ) {        
+        const thisSquare = (colIndex === 0 || colIndex % 2 === 0) ? board.white : board.black;
+        const piece = chessjs.get(letters[colIndex] + (rowNo+1).toString());
+
+        if (piece === null) {
+            len += buf.write(thisSquare, len, 'utf-16le');
+        } else {
+            len += buf.write(board[piece.color === 'w' ? piece.type.toUpperCase() : piece.type], len, 'utf-16le');
+        }
+    }
+    len += buf.write(keysRequired[1], len, 'utf-16le');
+
+    return channel.send(buf.toString('utf-16le', 0, len));
+}
+
+// function showPartialBigBoard(guildid, channel, userid, chessjs, isFlipped, board, lineNoStart) {
+
+//     const buf = Buffer.alloc(70, 0, 'utf-16le');
+//     var len = 0;
+//     // len += buf.write(board.white, len, 'utf-16le');
+//     // len += buf.write(board.black, len, 'utf-16le');
+//     // len += buf.write(board.white, len, 'utf-16le');
+//     // len += buf.write(board.black, len, 'utf-16le');
+//     // len += buf.write(board.white, len, 'utf-16le');
+//     // len += buf.write(board.black, len, 'utf-16le');
+
+//     //const result = [];
+//     //const spaceUnicode = '            ';//unicode spaces (different to normal space)
+//     //const spaceUnicode3 = '      ';;//unicode spaces (different to normal space)
+
+//     //if (!isFlipped) {
+//     //    result.push(spaceUnicode3);
+//     //}
+//     const keys = [board['key1'], board['key2'], board['key3'], board['key4'], board['key5'], board['key6'], board['key7'], board['key8']];
+//     const letterKeys = [board.keya, board.keyb, board.keyc, board.keyd, board.keye, board.keyf, board.keyg, board.keyh];
+//     var lineTo = lineNoStart+1;
+//     if (lineNoStart == 0) {
+//         len += buf.write(board.wallplus, len, 'utf-16le');
+//         lineTo = 1;
+
+//         for (var i = 0; i < 8; i++) { 
+//             len += buf.write(letterKeys[i], len, 'utf-16le');
+//         }
+//     }
+
+//     len += buf.write(board.wallplus, len, 'utf-16le');
+    
+//     len += buf.write('\n', len, 'utf-16le');
+
+//     // line two
+//     len += buf.write(board.key1, len, 'utf-16le');
+
+//     var yStagger = false;
+
+//     for (var rowNo=lineNoStart-1; rowNo < lineTo; rowNo++) {
+//         for (var colIndex=0; colIndex < 8; colIndex++ ) {        
+
+//             // if (isFlipped
+//             //     ? colIndex < end
+//             //     : colIndex > end)
+//             //         break;
+
+//             const thisSquare = (colIndex === 0 || colIndex % 2 === 0)
+//                 ? yStagger ? board.black : board.white
+//                 : yStagger ? board.white : board.black;
+
+//             const piece = chessjs.get(letters[colIndex] + (rowNo+1).toString());
+
+//             if (piece === null) {
+//                 len += buf.write(thisSquare, len, 'utf-16le');
+//             } else {
+//                 len += buf.write(board[piece.color === 'w' ? piece.type.toUpperCase() : piece.type], len, 'utf-16le');
+//             }
+
+
+//         }
+//         yStagger = !yStagger;
+//         len += buf.write('\n', len, 'utf-16le');
+//     }
+
+//     if (lineNoStart == 8) {
+//         len += buf.write(board.wallplus, len, 'utf-16le');
+        
+//         for (var i = 0; i < 8; i++) { 
+//             len += buf.write(letterKeys[i], len, 'utf-16le');
+//         }
+//         len += buf.write(board.wallplus, len, 'utf-16le');        
+//     }
+// // const buf = Buffer.alloc(70, 0, 'utf-16le');
+//     // var len = 0;
+//     // len += buf.write(board.white, len, 'utf-16le');
+//     // len += buf.write(board.black, len, 'utf-16le');
+//     // len += buf.write(board.white, len, 'utf-16le');
+//     // len += buf.write(board.black, len, 'utf-16le');
+//     // len += buf.write(board.white, len, 'utf-16le');
+//     // len += buf.write(board.black, len, 'utf-16le');
+//     // len += buf.write(board.white, len, 'utf-16le');
+//     // len += buf.write(board.black, len, 'utf-16le');
+//     // len += buf.write('\n', len, 'utf-16le');
+//     // len += buf.write(board.black, len, 'utf-16le');
+//     // len += buf.write(board.white, len, 'utf-16le');
+//     // len += buf.write(board.black, len, 'utf-16le');
+//     // len += buf.write(board.white, len, 'utf-16le');
+//     // len += buf.write(board.black, len, 'utf-16le');
+//     // len += buf.write(board.white, len, 'utf-16le');
+//     // len += buf.write(board.black, len, 'utf-16le');
+//     // len += buf.write(board.white, len, 'utf-16le');
+
+//     return channel.send(buf.toString('utf-16le', 0, len));
+// }
+
 if (typeof String.prototype.replaceAll === 'undefined') {
     String.prototype.replaceAll = function (replaceThis, withThis) {
         return this.split(replaceThis).join(withThis);
     }
 }
 
-function makeEmojiBoard(guildid, userid, chessjs, isFlipped, boardName) {
+function makeEmojiBoard(guildid, channel, userid, chessjs, isFlipped, boardName) {
     const board = repo.dbGetCustomDeck(guildid, userid, boardName);
-
+    
     const result = [];
     const spaceUnicode = '            ';//unicode spaces (different to normal space)
     const spaceUnicode3 = '      ';;//unicode spaces (different to normal space)
@@ -687,6 +957,11 @@ function makeEmojiBoard(guildid, userid, chessjs, isFlipped, boardName) {
 }
 
 function showBoard(guildid, requesterid, channel, existingGame, reactionArray, selected) {
+    return showBoardSmall(guildid, requesterid, channel, existingGame, reactionArray, selected);
+
+}
+
+function showBoardSmall(guildid, requesterid, channel, existingGame, reactionArray, selected) {
     if (typeof selected === 'undefined') selected = null;
     if (typeof existingGame.chessjs === 'undefined' || existingGame.chessjs === null) return;
 
@@ -1512,8 +1787,18 @@ function processVerb(guildid, message, channelid, messageauthorid, gameKeysInThi
                     infoThing = parsedMessage.infoThing;
                 }
                 
-                chessyInfo(guildid, channelid, messageauthorid, infoThing, existingGame[0].chessjs, message.channel)
+                const boardName = repo.dbGetSettingDeckType(guildid, messageauthorid); 
+                const board = repo.dbGetCustomDeck(guildid, messageauthorid, boardName);
+
+                const chessjs = existingGame[0].chessjs;
+                chessyInfo(guildid, channelid, messageauthorid, infoThing, chessjs, message.channel)
                     .then(t => showBoard(guildid, messageauthorid, message.channel, messageauthorsgame, emoji_board_toolkit))
+                    .then(t => showPartialBigBoardStart(guildid, message.channel, messageauthorid, chessjs, false, board, 0))
+                    //.then(t => showPartialBigBoard2(guildid, message.channel, messageauthorid, chessjs, false, board, 2))
+                    .then(t => showPartialBigBoardGeneral(guildid, message.channel, messageauthorid, chessjs, false, board, [board.key7, board.key6], [6,5]))
+                    .then(t => showPartialBigBoardGeneral(guildid, message.channel, messageauthorid, chessjs, false, board, [board.key5, board.key4], [4,3]))
+                    .then(t => showPartialBigBoardGeneral(guildid, message.channel, messageauthorid, chessjs, false, board, [board.key3, board.key2], [2,1]))
+                    .then(t => showPartialBigBoardEnd(guildid, message.channel, messageauthorid, chessjs, false, board))
                     .catch(console.log);
             }                        
             break;
