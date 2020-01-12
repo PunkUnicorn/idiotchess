@@ -480,14 +480,14 @@ function isValidPiece(fen, piece) {
 }
 
 
-function showBoardAscii(guildid, requesterid, channel, existingGame, reactionArray, whonext, whoNextGame, haveSelection, haveData, dataStr, usefulState, isOver, isWon, overReason) {
+function showBoardAscii(guildid, requesterid, channel, existingGame, reactionArray, whonext, whoNextGame, haveSelection, haveData, dataStr, usefulState, isOver, isWon, overReason, cb) {
     if (requesterid === null) {
         requesterid = whonext.whonextid;
     }
 
     var isFlipped = false;
-    var board = '';
-    var ascii = existingGame.chessjs.ascii();
+    // var board = '';
+    // var ascii = existingGame.chessjs.ascii();
 
     if (!whoNextGame[0].isWhite) {
         const setting = repo.dbGetSettingAutoFlip(guildid, requesterid);
@@ -498,8 +498,62 @@ function showBoardAscii(guildid, requesterid, channel, existingGame, reactionArr
         }
     }
 
+    return cb(guildid, requesterid, channel, existingGame, reactionArray, whonext, whoNextGame, haveSelection, haveData, dataStr, usefulState, isOver, isWon, overReason, isFlipped);
+}
 
+function bigboardCallback(guildid, requesterid, channel, existingGame, reactionArray, whonext, whoNextGame, haveSelection, haveData, dataStr, usefulState, isOver, isWon, overReason, isFlipped) {
     const boardName = repo.dbGetSettingDeckType(guildid, requesterid); 
+    const board = repo.dbGetCustomDeck(guildid, requesterid, boardName);
+
+    const additionalEmoji = [];
+    if (haveSelection) {
+        additionalEmoji.push(EMOJI_INFO);
+    }
+    if (haveData) {
+        additionalEmoji.push(EMOJI_CLEARSELECTION);
+    }
+
+    const whoPlayNext = isOver 
+        ? '\n' + overReason + '... ' 
+        : '\n<@' + whonext.whonextid + '> to play... ' ;
+
+    if (isOver) {
+        //Message to say Thank you! please click (something) to end the game
+        const overMsg = 'Thank you for using the idiotchess bot.' + isWon ? ' And congratulations to the winner!' : '';
+        tellUsers(guildid, channel.id, [whoNextGame[0].authorid, whoNextGame[0].targetid], overMsg, emoji_ribbon);
+        //  pgn to get the pgn
+        //  this game will auto-close in 1 min
+        //  offer icon to close
+        //or just delete the game
+        repo.dbRemoveGame(guildid, requesterid, channel.id);
+        repo.dbDecrementGameCount();
+    }
+
+    const chessjs = repo.dbGetForUserKey(guildid, existingGame.authorid, channel.id)[0].chessjs;    
+
+    const showReactions = (additionalEmoji.length > 0 && !isOver);
+    return (
+        showReactions 
+            ? channel.send(dataStr + usefulState + whoPlayNext)
+                .then(sentMessage => addEmojiArray(guildid, sentMessage, additionalEmoji))
+                .then(sentReactionArray => {
+                    addEmojiArray(guildid, sentReactionArray[0].message, reactionArray);
+                })
+            : channel.send(dataStr + usefulState + whoPlayNext)
+                .then(sentMessage => addEmojiArray(guildid, sentMessage, isOver ? (isWon ? emoji_board_prize : []) : reactionArray))
+          ).then(t =>  showPartialBigBoardStart(guildid, channel, requesterid, chessjs, false, board))
+          .then(t => showPartialBigBoardGeneral(guildid, channel, requesterid, chessjs, false, board, [board.key7, board.key6], [6,5]))
+          .then(t => showPartialBigBoardGeneral(guildid, channel, requesterid, chessjs, false, board, [board.key5, board.key4], [4,3]))
+          .then(t => showPartialBigBoardGeneral(guildid, channel, requesterid, chessjs, false, board, [board.key3, board.key2], [2,1]))
+          .then(t => showPartialBigBoardEnd(guildid, channel, requesterid, chessjs, false, board));
+
+}
+
+function smallboardCallback(guildid, requesterid, channel, existingGame, reactionArray, whonext, whoNextGame, haveSelection, haveData, dataStr, usefulState, isOver, isWon, overReason, isFlipped) {
+    const boardName = repo.dbGetSettingDeckType(guildid, requesterid); 
+
+    var board = '';
+    var ascii = existingGame.chessjs.ascii();
 
     switch (boardName) {
         case '1default1':
@@ -546,7 +600,7 @@ function showBoardAscii(guildid, requesterid, channel, existingGame, reactionArr
         //  this game will auto-close in 1 min
         //  offer icon to close
         //or just delete the game
-        repo.dbRemoveGame(guildid, userid, channel.id);
+        repo.dbRemoveGame(guildid, requesterid, channel.id);
         repo.dbDecrementGameCount();
     }
 
@@ -957,11 +1011,22 @@ function makeEmojiBoard(guildid, channel, userid, chessjs, isFlipped, boardName)
 }
 
 function showBoard(guildid, requesterid, channel, existingGame, reactionArray, selected) {
-    return showBoardSmall(guildid, requesterid, channel, existingGame, reactionArray, selected);
+    const isSmall = repo.dbGetSettingBigBoard(guildid, requesterid) !== true;
+    try {
+        return isSmall 
+            ? showBoardSmall(guildid, requesterid, channel, existingGame, reactionArray, selected, smallboardCallback)
+            : showBoardSmall(guildid, requesterid, channel, existingGame, reactionArray, selected, bigboardCallback);
+            
+
+    } catch (err) {
+        console.log('showBoard', err, 'parameters', guildid, requesterid, channel, existingGame, reactionArray, selected);
+    }
+
+    return showBoardSmall(guildid, requesterid, channel, existingGame, reactionArray, selected, smallboardCallback);
 
 }
 
-function showBoardSmall(guildid, requesterid, channel, existingGame, reactionArray, selected) {
+function showBoardSmall(guildid, requesterid, channel, existingGame, reactionArray, selected, cb) {
     if (typeof selected === 'undefined') selected = null;
     if (typeof existingGame.chessjs === 'undefined' || existingGame.chessjs === null) return;
 
@@ -1050,7 +1115,7 @@ l` \` `.`."`-..,-' j  /./ /, , / , / /l \   \=\l   || `' || ||...
     }
 
 
-    return showBoardAscii(guildid, requesterid, channel, existingGame, reactionArray, whonext, whoNextGame, haveSelection, haveData, dataStr, usefulState, isOver, isWon, overReason);
+    return showBoardAscii(guildid, requesterid, channel, existingGame, reactionArray, whonext, whoNextGame, haveSelection, haveData, dataStr, usefulState, isOver, isWon, overReason, cb);
 }
 
 function chessyInfo(guildid, channelid, messageauthorid, infoThing, chessjs, channel) {
@@ -1793,12 +1858,11 @@ function processVerb(guildid, message, channelid, messageauthorid, gameKeysInThi
                 const chessjs = existingGame[0].chessjs;
                 chessyInfo(guildid, channelid, messageauthorid, infoThing, chessjs, message.channel)
                     .then(t => showBoard(guildid, messageauthorid, message.channel, messageauthorsgame, emoji_board_toolkit))
-                    .then(t => showPartialBigBoardStart(guildid, message.channel, messageauthorid, chessjs, false, board, 0))
-                    //.then(t => showPartialBigBoard2(guildid, message.channel, messageauthorid, chessjs, false, board, 2))
-                    .then(t => showPartialBigBoardGeneral(guildid, message.channel, messageauthorid, chessjs, false, board, [board.key7, board.key6], [6,5]))
-                    .then(t => showPartialBigBoardGeneral(guildid, message.channel, messageauthorid, chessjs, false, board, [board.key5, board.key4], [4,3]))
-                    .then(t => showPartialBigBoardGeneral(guildid, message.channel, messageauthorid, chessjs, false, board, [board.key3, board.key2], [2,1]))
-                    .then(t => showPartialBigBoardEnd(guildid, message.channel, messageauthorid, chessjs, false, board))
+                    // .then(t => showPartialBigBoardStart(guildid, message.channel, messageauthorid, chessjs, false, board, 0))
+                    // .then(t => showPartialBigBoardGeneral(guildid, message.channel, messageauthorid, chessjs, false, board, [board.key7, board.key6], [6,5]))
+                    // .then(t => showPartialBigBoardGeneral(guildid, message.channel, messageauthorid, chessjs, false, board, [board.key5, board.key4], [4,3]))
+                    // .then(t => showPartialBigBoardGeneral(guildid, message.channel, messageauthorid, chessjs, false, board, [board.key3, board.key2], [2,1]))
+                    // .then(t => showPartialBigBoardEnd(guildid, message.channel, messageauthorid, chessjs, false, board))
                     .catch(console.log);
             }                        
             break;
@@ -2108,7 +2172,7 @@ function startBot() {
             console.log('err:', err);
         }
 
-    }, 1000 * 2 /* deep breath, count to two */ );
+    }, 1000 * 1 /* deep breath, count one  */ );
 }
 startBot();
 
@@ -2249,6 +2313,6 @@ var htmlServerInterval = setInterval(function () {
 
     // Console will print the message
     console.log('Server running at http://127.0.0.1:8081');
-}, 1000 * 6 );
+}, 1000 * 3 );
 
 console.log('Waiting for the machine to warm up a bit, please wait....');

@@ -176,7 +176,6 @@ https://www.asciiart.eu/electronics/clocks
       |        |
       |   ()   |                     
 */
-
 const timerMap = new Map();
 
 function timerAdd(guildid, channelid, messageauthorid, timer) {
@@ -551,6 +550,65 @@ function dbGetCustomDeck(guildid, userid, boardName) {
     return dbGetGuildCustomDeck(guildid, boardName);
 }
 
+//function dbGetSettingBigBoard() {
+
+const DEFAULT_BOARDSIZE = 'small';
+
+function dbGetSettingBigBoard(guildid) {
+    if (!settingsMap.has(guildid)) {
+        if (hasGuildSettingsOnDisk(guildid)) {
+            dbMakeGuildSettingsDb(guildid);
+        } else {
+            return DEFAULT_BOARDSIZE;
+        }
+    }
+    const first = (dbGetGuildSettings(guildid))().first();
+    if (typeof first.bigboard === 'undefined' || first.bigboard === null) {
+        return DEFAULT_BOARDSIZE;
+    }
+
+    if (first.length > 5) return false; //quick check before a JSON.parse
+    return JSON.parse(first.bigboard.toString().toLowerCase());
+}
+
+function dbGetGuildSettingBigBoard(guildid) {
+    if (!settingsMap.has(guildid)) {
+        if (hasGuildSettingsOnDisk(guildid)) {
+            dbMakeGuildSettingsDb(guildid);
+        } else {
+            return DEFAULT_BOARDSIZE;
+        }
+    }
+    const first = (dbGetGuildSettings(guildid))().first();
+    if (typeof first.bigboard === 'undefined' || first.bigboard === null) {
+        return DEFAULT_BOARDSIZE;
+    }
+
+    if (first.length > 5) return false; //quick check before a JSON.parse
+    return JSON.parse(first.bigboard.toString().toLowerCase());
+}
+
+function dbGetSettingBigBoard(guildid, userid) {
+    if (!settingsMap.has(userid)) {
+        if (hasSettingsOnDisk(guildid, userid)) {
+            dbMakeSettingsDb(guildid, userid);
+        } else {
+            return dbGetGuildSettingBigBoard(guildid);
+        }
+    }
+    const first = (dbGetUserSettings(guildid, userid))().first();
+    if (typeof first.bigboard === 'undefined' || first.bigboard === null) {
+        return dbGetGuildSettingBigBoard(guildid);
+    }
+
+    if (first.length > 5) return false; //quick check before a JSON.parse
+    return JSON.parse(first.bigboard.toString().toLowerCase());
+}
+
+
+
+//----------------------------------------------
+
 function dbGetGuildSettingAutoFlip(guildid) {
     if (!settingsMap.has(guildid)) {
         if (hasGuildSettingsOnDisk(guildid)) {
@@ -697,6 +755,7 @@ module.exports = {
     dbGetSettingAutoFlip,
     dbGetSettingAutoReact,
     dbGetSettingDeckType,
+    dbGetSettingBigBoard,
     dbGetCustomDeck,
 
     dbIncrementGameCount,
