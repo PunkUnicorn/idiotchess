@@ -532,20 +532,21 @@ function bigboardCallback(guildid, requesterid, channel, existingGame, reactionA
     const chessjs = repo.dbGetForUserKey(guildid, existingGame.authorid, channel.id)[0].chessjs;    
 
     const showReactions = (additionalEmoji.length > 0 && !isOver);
-    return (
-        showReactions 
-            ? channel.send(dataStr + usefulState + whoPlayNext)
-                .then(sentMessage => addEmojiArray(guildid, sentMessage, additionalEmoji))
-                .then(sentReactionArray => {
-                    addEmojiArray(guildid, sentReactionArray[0].message, reactionArray);
-                })
-            : channel.send(dataStr + usefulState + whoPlayNext)
-                .then(sentMessage => addEmojiArray(guildid, sentMessage, isOver ? (isWon ? emoji_board_prize : []) : reactionArray))
-          ).then(t =>  showPartialBigBoardStart(guildid, channel, requesterid, chessjs, false, board))
-          .then(t => showPartialBigBoardGeneral(guildid, channel, requesterid, chessjs, false, board, [board.key7, board.key6], [6,5]))
-          .then(t => showPartialBigBoardGeneral(guildid, channel, requesterid, chessjs, false, board, [board.key5, board.key4], [4,3]))
-          .then(t => showPartialBigBoardGeneral(guildid, channel, requesterid, chessjs, false, board, [board.key3, board.key2], [2,1]))
-          .then(t => showPartialBigBoardEnd(guildid, channel, requesterid, chessjs, false, board));
+    return showPartialBigBoardStart(guildid, channel, requesterid, chessjs, false, board)
+            .then(t => showPartialBigBoardGeneral(guildid, channel, requesterid, chessjs, false, board, [board.key7, board.key6], [6,5]))
+            .then(t => showPartialBigBoardGeneral(guildid, channel, requesterid, chessjs, false, board, [board.key5, board.key4], [4,3]))
+            .then(t => showPartialBigBoardGeneral(guildid, channel, requesterid, chessjs, false, board, [board.key3, board.key2], [2,1]))
+            .then(t => showPartialBigBoardEnd(guildid, channel, requesterid, chessjs, false, board))
+            .then(t => (
+                        showReactions 
+                            ? channel.send(dataStr + usefulState + whoPlayNext)
+                                .then(sentMessage => addEmojiArray(guildid, sentMessage, additionalEmoji))
+                                .then(sentReactionArray => {
+                                    addEmojiArray(guildid, sentReactionArray[0].message, reactionArray);
+                                })
+                            : channel.send(dataStr + usefulState + whoPlayNext)
+                                .then(sentMessage => addEmojiArray(guildid, sentMessage, isOver ? (isWon ? emoji_board_prize : []) : reactionArray))
+                        ));
 
 }
 
