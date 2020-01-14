@@ -109,11 +109,12 @@ function cancelGame(guildid, channelid, messageauthorid, options) {
         throw 'err: no game to cancel';
     }
     destroyInviteTimer(guildid, channelid, game[0].authorid); ///---
-    repo.dbRemoveGame(guildid, messageauthorid, channelid);
 
     if (game[0].state !== NS_INVITED) {
-        repo.dbDecrementGameCount();
+        endGameStatsAdjust(guildid, channelid, game[0].authorid);
     }
+    repo.dbRemoveGame(guildid, messageauthorid, channelid);
+
 
     const authorsGame = game.filter(f => f.isAuthor);
     if (authorsGame.length === 0) {
@@ -285,8 +286,7 @@ function tellChannel(guildid, channelid, speak, optionalemoji, optionalchannel) 
 
 
 
-
-var esrever = require('esrever');
+//var esrever = require('esrever');
 
 const emoji_numbers = '🔢';
 const emoji_a = '🇦';
@@ -525,29 +525,47 @@ function bigboardCallback(guildid, requesterid, channel, existingGame, reactionA
         //  this game will auto-close in 1 min
         //  offer icon to close
         //or just delete the game
+        endGameStatsAdjust(guildid, channel.id, whoNextGame[0].authorid);
         repo.dbRemoveGame(guildid, requesterid, channel.id);
-        repo.dbDecrementGameCount();
     }
 
     const chessjs = repo.dbGetForUserKey(guildid, existingGame.authorid, channel.id)[0].chessjs;    
 
     const showReactions = (additionalEmoji.length > 0 && !isOver);
-    return showPartialBigBoardStart(guildid, channel, requesterid, chessjs, false, board)
-            .then(t => showPartialBigBoardGeneral(guildid, channel, requesterid, chessjs, false, board, [board.key7, board.key6], [6,5]))
-            .then(t => showPartialBigBoardGeneral(guildid, channel, requesterid, chessjs, false, board, [board.key5, board.key4], [4,3]))
-            .then(t => showPartialBigBoardGeneral(guildid, channel, requesterid, chessjs, false, board, [board.key3, board.key2], [2,1]))
-            .then(t => showPartialBigBoardEnd(guildid, channel, requesterid, chessjs, false, board))
-            .then(t => (
-                        showReactions 
-                            ? channel.send(dataStr + usefulState + whoPlayNext)
-                                .then(sentMessage => addEmojiArray(guildid, sentMessage, additionalEmoji))
-                                .then(sentReactionArray => {
-                                    addEmojiArray(guildid, sentReactionArray[0].message, reactionArray);
-                                })
-                            : channel.send(dataStr + usefulState + whoPlayNext)
-                                .then(sentMessage => addEmojiArray(guildid, sentMessage, isOver ? (isWon ? emoji_board_prize : []) : reactionArray))
-                        ));
 
+    if (isFlipped) {
+        return  showPartialBigBoardEndFlipped(guildid, channel, requesterid, chessjs, false, board)
+                .then(t => showPartialBigBoardGeneral(guildid, channel, requesterid, chessjs, false, board, [board.key2, board.key3], [1,2]))
+                .then(t => showPartialBigBoardGeneral(guildid, channel, requesterid, chessjs, false, board, [board.key4, board.key5], [3,4]))
+                .then(t => showPartialBigBoardGeneral(guildid, channel, requesterid, chessjs, false, board, [board.key6, board.key7], [5,6]))
+                .then(t => showPartialBigBoardStartFlipped(guildid, channel, requesterid, chessjs, false, board))
+                .then(t => (
+                            showReactions 
+                                ? channel.send(dataStr + usefulState + whoPlayNext)
+                                    .then(sentMessage => addEmojiArray(guildid, sentMessage, additionalEmoji))
+                                    .then(sentReactionArray => {
+                                        addEmojiArray(guildid, sentReactionArray[0].message, reactionArray);
+                                    })
+                                : channel.send(dataStr + usefulState + whoPlayNext)
+                                    .then(sentMessage => addEmojiArray(guildid, sentMessage, isOver ? (isWon ? emoji_board_prize : []) : reactionArray))
+                            ));
+    } else {
+        return showPartialBigBoardStart(guildid, channel, requesterid, chessjs, false, board)
+                .then(t => showPartialBigBoardGeneral(guildid, channel, requesterid, chessjs, false, board, [board.key7, board.key6], [6,5]))
+                .then(t => showPartialBigBoardGeneral(guildid, channel, requesterid, chessjs, false, board, [board.key5, board.key4], [4,3]))
+                .then(t => showPartialBigBoardGeneral(guildid, channel, requesterid, chessjs, false, board, [board.key3, board.key2], [2,1]))
+                .then(t => showPartialBigBoardEnd(guildid, channel, requesterid, chessjs, false, board))
+                .then(t => (
+                            showReactions 
+                                ? channel.send(dataStr + usefulState + whoPlayNext)
+                                    .then(sentMessage => addEmojiArray(guildid, sentMessage, additionalEmoji))
+                                    .then(sentReactionArray => {
+                                        addEmojiArray(guildid, sentReactionArray[0].message, reactionArray);
+                                    })
+                                : channel.send(dataStr + usefulState + whoPlayNext)
+                                    .then(sentMessage => addEmojiArray(guildid, sentMessage, isOver ? (isWon ? emoji_board_prize : []) : reactionArray))
+                            ));
+    }
 }
 
 function smallboardCallback(guildid, requesterid, channel, existingGame, reactionArray, whonext, whoNextGame, haveSelection, haveData, dataStr, usefulState, isOver, isWon, overReason, isFlipped) {
@@ -601,8 +619,8 @@ function smallboardCallback(guildid, requesterid, channel, existingGame, reactio
         //  this game will auto-close in 1 min
         //  offer icon to close
         //or just delete the game
+        endGameStatsAdjust(guildid, channel.id, whoNextGame[0].authorid);
         repo.dbRemoveGame(guildid, requesterid, channel.id);
-        repo.dbDecrementGameCount();
     }
 
     if (additionalEmoji.length > 0 && !isOver) {
@@ -640,10 +658,8 @@ function showPartialBigBoardEnd(guildid, channel, userid, chessjs, isFlipped, bo
     const keys = [board['key1'], board['key2'], board['key3'], board['key4'], board['key5'], board['key6'], board['key7'], board['key8']];
     const letterKeys = [board.keya, board.keyb, board.keyc, board.keyd, board.keye, board.keyf, board.keyg, board.keyh];
 
-
-    len += buf.write(board.key1, len, 'utf-16le');
-
     var rowNo=0;
+    len += buf.write(keys[rowNo], len, 'utf-16le');
     for (var colIndex=0; colIndex < 8; colIndex++ ) {        
         const thisSquare = (colIndex === 0 || colIndex % 2 === 0) ? board.black : board.white;
         const piece = chessjs.get(letters[colIndex] + (rowNo+1).toString());
@@ -654,7 +670,7 @@ function showPartialBigBoardEnd(guildid, channel, userid, chessjs, isFlipped, bo
             len += buf.write(board[piece.color === 'w' ? piece.type.toUpperCase() : piece.type], len, 'utf-16le');
         }
     }
-    len += buf.write(board.key1, len, 'utf-16le');
+    len += buf.write(keys[rowNo], len, 'utf-16le');
 
     len += buf.write('\n', len, 'utf-16le');
 
@@ -673,23 +689,59 @@ function showPartialBigBoardEnd(guildid, channel, userid, chessjs, isFlipped, bo
 
 }
 
-function showPartialBigBoardStart(guildid, channel, userid, chessjs, isFlipped, board, lineNoStart) {
+function showPartialBigBoardEndFlipped(guildid, channel, userid, chessjs, isFlipped, board, lineNoStart) {
     const buf = Buffer.alloc(126, 0, 'utf-16le');
     var len = 0;
 
     const keys = [board['key1'], board['key2'], board['key3'], board['key4'], board['key5'], board['key6'], board['key7'], board['key8']];
     const letterKeys = [board.keya, board.keyb, board.keyc, board.keyd, board.keye, board.keyf, board.keyg, board.keyh];
+
+    len += buf.write(board.wallplus, len, 'utf-16le');
+    for (var i = 0; i < 8; i++) { 
+        len += buf.write('\uFEFF'+ letterKeys[i], len, 'utf-16le');
+    }
+    len += buf.write(board.wallplus, len, 'utf-16le');
+
+
+
+    len += buf.write('\n', len, 'utf-16le');
+    
+
+    var rowNo=0;
+    len += buf.write(keys[rowNo], len, 'utf-16le');
+    for (var colIndex=0; colIndex < 8; colIndex++ ) {        
+        const thisSquare = (colIndex === 0 || colIndex % 2 === 0) ? board.black : board.white;
+        const piece = chessjs.get(letters[colIndex] + (rowNo+1).toString());
+
+        if (piece === null) {
+            len += buf.write(thisSquare, len, 'utf-16le');
+        } else {
+            len += buf.write(board[piece.color === 'w' ? piece.type.toUpperCase() : piece.type], len, 'utf-16le');
+        }
+    }
+    len += buf.write(keys[rowNo], len, 'utf-16le');
+
+    return channel.send(buf.toString('utf-16le', 0, len));
+
+}
+
+
+function showPartialBigBoardStartTop(guildid, channel, userid, chessjs, isFlipped, board, lineNoStart, buf, len, letterKeys) {
+    // const letterKeys = [board.keya, board.keyb, board.keyc, board.keyd, board.keye, board.keyf, board.keyg, board.keyh];
     len += buf.write(board.wallplus, len, 'utf-16le');
     for (var i = 0; i < 8; i++) { 
         len += buf.write('\uFEFF'+ letterKeys[i], len, 'utf-16le');
     }
     len += buf.write(board.wallplus, len, 'utf-16le');
     
-    len += buf.write('\n', len, 'utf-16le');
+    return len;
+}
 
-    len += buf.write(board.key8, len, 'utf-16le');
-
+function showPartialBigBoardStartBottom(guildid, channel, userid, chessjs, isFlipped, board, lineNoStart, buf, len, letterKeys) {
+    const keys = [board['key1'], board['key2'], board['key3'], board['key4'], board['key5'], board['key6'], board['key7'], board['key8']];
+     
     var rowNo=7;
+    len += buf.write(keys[rowNo], len, 'utf-16le');
     for (var colIndex=0; colIndex < 8; colIndex++ ) {        
         const thisSquare = (colIndex === 0 || colIndex % 2 === 0) ? board.white : board.black;
         const piece = chessjs.get(letters[colIndex] + (rowNo+1).toString());
@@ -700,7 +752,62 @@ function showPartialBigBoardStart(guildid, channel, userid, chessjs, isFlipped, 
             len += buf.write(board[piece.color === 'w' ? piece.type.toUpperCase() : piece.type], len, 'utf-16le');
         }
     }
-    len += buf.write(board.key8, len, 'utf-16le');
+    len += buf.write(keys[rowNo], len, 'utf-16le');
+
+    return len;
+}
+
+
+function showPartialBigBoardStart(guildid, channel, userid, chessjs, isFlipped, board, lineNoStart) {
+    const buf = Buffer.alloc(126, 0, 'utf-16le');
+    var len = 0;
+
+    const letterKeys = [board.keya, board.keyb, board.keyc, board.keyd, board.keye, board.keyf, board.keyg, board.keyh];
+    
+    len = showPartialBigBoardStartTop(guildid, channel, userid, chessjs, isFlipped, board, lineNoStart, buf, len, letterKeys);
+    // len += buf.write(board.wallplus, len, 'utf-16le');
+    // for (var i = 0; i < 8; i++) { 
+    //     len += buf.write('\uFEFF'+ letterKeys[i], len, 'utf-16le');
+    // }
+    // len += buf.write(board.wallplus, len, 'utf-16le');
+    
+    // len += buf.write('\n', len, 'utf-16le');
+
+    // len += buf.write(board.key8, len, 'utf-16le');
+
+
+    len += buf.write('\n', len, 'utf-16le');
+
+    len = showPartialBigBoardStartBottom(guildid, channel, userid, chessjs, isFlipped, board, lineNoStart, buf, len, letterKeys);
+    // var rowNo=7;
+    // for (var colIndex=0; colIndex < 8; colIndex++ ) {        
+    //     const thisSquare = (colIndex === 0 || colIndex % 2 === 0) ? board.white : board.black;
+    //     const piece = chessjs.get(letters[colIndex] + (rowNo+1).toString());
+
+    //     if (piece === null) {
+    //         len += buf.write(thisSquare, len, 'utf-16le');
+    //     } else {
+    //         len += buf.write(board[piece.color === 'w' ? piece.type.toUpperCase() : piece.type], len, 'utf-16le');
+    //     }
+    // }
+    // len += buf.write(board.key8, len, 'utf-16le');
+
+
+    return channel.send(buf.toString('utf-16le', 0, len));
+}
+
+function showPartialBigBoardStartFlipped(guildid, channel, userid, chessjs, isFlipped, board, lineNoStart) {
+    const buf = Buffer.alloc(126, 0, 'utf-16le');
+    var len = 0;
+
+    const letterKeys = [board.keya, board.keyb, board.keyc, board.keyd, board.keye, board.keyf, board.keyg, board.keyh];
+    
+    len = showPartialBigBoardStartBottom(guildid, channel, userid, chessjs, isFlipped, board, lineNoStart, buf, len, letterKeys);
+
+    len += buf.write('\n', len, 'utf-16le');
+
+    len = showPartialBigBoardStartTop(guildid, channel, userid, chessjs, isFlipped, board, lineNoStart, buf, len, letterKeys);
+
     return channel.send(buf.toString('utf-16le', 0, len));
 }
 
@@ -776,11 +883,16 @@ function showPartialBigBoardGeneral(guildid, channel, userid, chessjs, isFlipped
     len += buf.write(keysRequired[0], len, 'utf-16le');
     len += buf.write('\n', len, 'utf-16le');
 
-    yStagger = !yStagger;
+    // Duplication of first, however, this keeps the flipped board simple
+    rowNo=rowNos[1];
+    yStagger = (rowNo == 0 || rowNo % 2 == 0);
     len += buf.write(keysRequired[1], len, 'utf-16le');
-    var rowNo=rowNos[1];
-    for (var colIndex=0; colIndex < 8; colIndex++ ) {        
-        const thisSquare = (colIndex === 0 || colIndex % 2 === 0) ? board.white : board.black;
+    for (var colIndex=0; colIndex < 8; colIndex++ ) {       
+
+        const thisSquare = (colIndex === 0 || colIndex % 2 === 0)
+            ? yStagger ? board.black : board.white
+            : yStagger ? board.white : board.black;
+
         const piece = chessjs.get(letters[colIndex] + (rowNo+1).toString());
 
         if (piece === null) {
@@ -1160,6 +1272,18 @@ function chessyInfo(guildid, channelid, messageauthorid, infoThing, chessjs, cha
     return tellUser(guildid, channelid, messageauthorid, infoString, EMOJI_INFO);
 }
 
+
+function newGameStatsAdjust(guildid, authorid, channelid, userid) {
+    repo.dbIncrementGameCount();
+    console.log('new game:', guildid, authorid, channelid, userid);
+}
+
+function endGameStatsAdjust(guildid, channelid, authorid) {
+    repo.dbDecrementGameCount();
+    console.log('end game', guildid, channelid, authorid);
+}
+
+
 function reactGameInvite(guildid, channel, userid, authorid, isAcceptance, isWhite, fenStuff, pgnStuff) {
     const channelid = channel.id;
 
@@ -1190,16 +1314,16 @@ function reactGameInvite(guildid, channel, userid, authorid, isAcceptance, isWhi
         repo.dbUpdateGameTarget(guildid, authorid, channelid, userid, { isWhite });
         repo.dbUpdateForGame(guildid, authorid, channelid, { state: NS_ACCEPTED });
 
-        repo.dbIncrementGameCount();
+        newGameStatsAdjust(guildid, authorid, channelid, userid);
 
         /*LOGGING*/
-        {
-            const game = repo.dbGetForUserKey(guildid, authorid, channelid);
-            console.log('new game', guildid, channelid, authorid, game);
-        }
+        const game = repo.dbGetForUserKey(guildid, authorid, channelid);
+        //console.log('new game', guildid, channelid, authorid, game);
+        /*LOGGING*/
 
+        const whosturnnextid = ( game[0].isWhite ? game[0].authorid : game[0].targetid );
         return channel.send("It's ON! ")
-            .then(t => showBoard(guildid, null, channel, repo.dbGetForUserKey(guildid, authorid, channelid)[0], emoji_board_toolkit));
+            .then(t => showBoard(guildid, whosturnnextid, channel, repo.dbGetForUserKey(guildid, authorid, channelid)[0], emoji_board_toolkit));
 
     } else {
         return tellUserOfCancel(guildid, channelid, userid, { deleteIt: true });        
@@ -1519,7 +1643,7 @@ function movePieceBoyakasha(guildid, channelid, userid, existingGame, cleanedMov
 
     repo.dbUpdateForUser(guildid, existingGame.authorid, channelid, { chessjs });
     repo.dbUpdateForGame(guildid, existingGame.authorid, channelid, { data:[] });
-    return showBoard(guildid, null, message.channel, repo.dbGetForUserKey(guildid, existingGame.authorid, channelid)[0], emoji_board_toolkit);
+    return showBoard(guildid, whonextid, message.channel, repo.dbGetForUserKey(guildid, existingGame.authorid, channelid)[0], emoji_board_toolkit);
 }
 
 function getLettersNumbersForValidMoves(piece, existingGame, isWhite) {
@@ -1647,20 +1771,20 @@ function processVerb(guildid, message, channelid, messageauthorid, gameKeysInThi
                 case '3':
                 case 'third':
                 case '3rd':
-                    finalText = [helpText1, helpText2, helpText3].join('\n\n') + '\n';
+                    finalText = [helpText1, helpText2, helpText3].join('\n\n') + '\n\n';
                     break;
 
                 case '2':
                 case 'second':
                 case '2nd':
-                    finalText = [helpText1, helpText2, '@idiotchess `help third` for the next'].join('\n\n') + '\n';
+                    finalText = [helpText1, helpText2, '@idiotchess `help third` for the next'].join('\n\n') + '\n\n';
                     break;
 
                 case '1':
                 case 'first':
                 case '1st':
                 default:
-                    finalText = [helpText1, '@idiotchess `help second` for the next'].join('\n\n') + '\n';
+                    finalText = [helpText1, '@idiotchess `help second` for the next'].join('\n\n') + '\n\n';
                     break;
             }
             tellUser(guildid, channelid, messageauthorid, finalText, emoji_speakinghead, message )
@@ -1883,8 +2007,8 @@ function processVerb(guildid, message, channelid, messageauthorid, gameKeysInThi
                     const overMsg = ', ' + itsname + ' has resigned.';
                     tellUsers(guildid, message.channel.id, [existingGame[0].authorid, existingGame[0].targetid], overMsg, emoji_handshake);
                     
+                    endGameStatsAdjust(guildid, message.channel.id, existingGame[0].authorid);
                     repo.dbRemoveGame(guildid, messageauthorid, message.channel.id);
-                    repo.dbDecrementGameCount();                
                 }
             }
             break;
