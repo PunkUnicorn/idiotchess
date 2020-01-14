@@ -224,8 +224,9 @@ function tellThemTheListOfGames(guildid, channelid, userid, message) {
             });
     
     const msg = '*List:*  \n\t' + displayTheirGamesInProgress.join("\n\t");
+    console.log(msg + '\n\n ...also: ' + JSON.stringify(repo.dbGetAll(guildid)[0]));
     return message.channel
-        .send(msg + '\n\n ...also: ' + JSON.stringify(repo.dbGetAll(guildid)[0]))
+        .send(msg)
         .then(function (result) {
             result.react(information).catch(console.log);
         });
@@ -514,24 +515,32 @@ function bigboardCallback(guildid, requesterid, channel, existingGame, reactionA
     }
 
     const whoPlayNext = isOver 
-        ? '\n' + overReason + '... ' 
+        ? '\n' // + overReason + '... ' 
         : '\n<@' + whonext.whonextid + '> to play... ' ;
 
     if (isOver) {
-        //Message to say Thank you! please click (something) to end the game
-        const overMsg = 'Thank you for using the idiotchess bot.' + isWon ? ' And congratulations to the winner!' : '';
-        tellUsers(guildid, channel.id, [whoNextGame[0].authorid, whoNextGame[0].targetid], overMsg, emoji_ribbon);
-        //  pgn to get the pgn
-        //  this game will auto-close in 1 min
-        //  offer icon to close
+        // const botname = bot.user.username;
+        // //Message to say Thank you! please click (something) to end the game
+        // const overMsg = 'Thank you for using the '+botname+' bot.' + isWon ? ' And congratulations to the winner!' : '';
+        // tellUsers(guildid, channel.id, [whoNextGame[0].authorid, whoNextGame[0].targetid], overMsg, emoji_ribbon);
+        // //  pgn to get the pgn
+        // //  this game will auto-close in 1 min
+        // //  offer icon to close
         //or just delete the game
-        endGameStatsAdjust(guildid, channel.id, whoNextGame[0].authorid);
-        repo.dbRemoveGame(guildid, requesterid, channel.id);
+        setTimeout( function() {            
+            endGameStatsAdjust(guildid, channel.id, whoNextGame[0].authorid);
+            repo.dbRemoveGame(guildid, requesterid, channel.id);
+        }, 2000); //wait two seconds before deleting, so we can draw the board first
     }
 
     const chessjs = repo.dbGetForUserKey(guildid, existingGame.authorid, channel.id)[0].chessjs;    
 
     const showReactions = (additionalEmoji.length > 0 && !isOver);
+
+    const botname = bot.user.username;
+    const overMsg = isOver 
+        ? '\n\nThank you for using the '+botname+' bot.' + (isWon ? ' And congratulations to the winner!' : '')
+        : '';
 
     if (isFlipped) {
         return  showPartialBigBoardEndFlipped(guildid, channel, requesterid, chessjs, false, board)
@@ -541,12 +550,12 @@ function bigboardCallback(guildid, requesterid, channel, existingGame, reactionA
                 .then(t => showPartialBigBoardStartFlipped(guildid, channel, requesterid, chessjs, false, board))
                 .then(t => (
                             showReactions 
-                                ? channel.send(dataStr + usefulState + whoPlayNext)
+                                ? channel.send(dataStr + usefulState + whoPlayNext + overMsg)
                                     .then(sentMessage => addEmojiArray(guildid, sentMessage, additionalEmoji))
                                     .then(sentReactionArray => {
                                         addEmojiArray(guildid, sentReactionArray[0].message, reactionArray);
                                     })
-                                : channel.send(dataStr + usefulState + whoPlayNext)
+                                : channel.send(dataStr + usefulState + whoPlayNext + overMsg)
                                     .then(sentMessage => addEmojiArray(guildid, sentMessage, isOver ? (isWon ? emoji_board_prize : []) : reactionArray))
                             ));
     } else {
@@ -557,12 +566,12 @@ function bigboardCallback(guildid, requesterid, channel, existingGame, reactionA
                 .then(t => showPartialBigBoardEnd(guildid, channel, requesterid, chessjs, false, board))
                 .then(t => (
                             showReactions 
-                                ? channel.send(dataStr + usefulState + whoPlayNext)
+                                ? channel.send(dataStr + usefulState + whoPlayNext + overMsg)
                                     .then(sentMessage => addEmojiArray(guildid, sentMessage, additionalEmoji))
                                     .then(sentReactionArray => {
                                         addEmojiArray(guildid, sentReactionArray[0].message, reactionArray);
                                     })
-                                : channel.send(dataStr + usefulState + whoPlayNext)
+                                : channel.send(dataStr + usefulState + whoPlayNext + overMsg)
                                     .then(sentMessage => addEmojiArray(guildid, sentMessage, isOver ? (isWon ? emoji_board_prize : []) : reactionArray))
                             ));
     }
@@ -608,13 +617,14 @@ function smallboardCallback(guildid, requesterid, channel, existingGame, reactio
     }
 
     const whoPlayNext = isOver 
-        ? '\n' + overReason + '... ' 
+        ? '\n' //+ overReason + '.... ' 
         : '\n<@' + whonext.whonextid + '> to play... ' ;
 
     if (isOver) {
+        //const botname = bot.user.username;
         //Message to say Thank you! please click (something) to end the game
-        const overMsg = 'Thank you for using the idiotchess bot.' + isWon ? ' And congratulations to the winner!' : '';
-        tellUsers(guildid, channel.id, [whoNextGame[0].authorid, whoNextGame[0].targetid], overMsg, emoji_ribbon);
+        //const overMsg = 'Thank you for using the '+botname+' bot.' + isWon ? ' And congratulations to the winner!' : '';
+        //tellUsers(guildid, channel.id, [whoNextGame[0].authorid, whoNextGame[0].targetid], overMsg, emoji_ribbon);
         //  pgn to get the pgn
         //  this game will auto-close in 1 min
         //  offer icon to close
@@ -623,16 +633,20 @@ function smallboardCallback(guildid, requesterid, channel, existingGame, reactio
         repo.dbRemoveGame(guildid, requesterid, channel.id);
     }
 
+    const overMsg = isOver 
+        ? '\n\nThank you for using the '+botname+' bot.' + (isWon ? ' And congratulations to the winner!' : '')
+        : '';
+
     if (additionalEmoji.length > 0 && !isOver) {
         return channel
-            .send(board + dataStr + usefulState + whoPlayNext)
+            .send(board + dataStr + usefulState + whoPlayNext + overMsg)
             .then(sentMessage => addEmojiArray(guildid, sentMessage, additionalEmoji))
             .then(sentReactionArray => {
                 addEmojiArray(guildid, sentReactionArray[0].message, reactionArray);
             });
     } else {
         return channel
-            .send(board + dataStr + usefulState + whoPlayNext)
+            .send(board + dataStr + usefulState + whoPlayNext + overMsg)
             .then(sentMessage => addEmojiArray(guildid, sentMessage, isOver ? (isWon ? emoji_board_prize : []) : reactionArray));
 
     }
@@ -1748,22 +1762,24 @@ function processVerb(guildid, message, channelid, messageauthorid, gameKeysInThi
             if (parsedMessage.restOfMessage.length > 0) {
                 var page = parsedMessage.restOfMessage.join(' ');                    
             }
+            const botname = bot.user.username;
             const helpText1 = 
-                '\n> `@idiotchess play @<your friend>`' 
+                '\n> `@'+botname+' play @<your friend>`' 
                 + '\nor to continue a game:'
-                + '\n> `@idiotchess play @<your friend> [fen <chess FEN mumbo jumbo here>]`'
+                + '\n> `@'+botname+' play @<your friend> [fen <chess FEN stuff here>]`'
                 + '\n' + 'e.g.\n'
-                + '\n> `@idiotchess play @BestBuddy`'
+                + '\n> `@'+botname+' play @BestBuddy`'
                 + '\nor to continue a game:'
-                + '\n> `@idiotchess play @Topalov fen rnbqkbnr/pp1ppppp/8/2p5/4P3/8/PPPP1PPP/RNBQKBNR w KQkq c6 0 2`'
-                + '\n\n' + 'Whilst playing you can save the game using the `fen` command, and continue it later:\n> ```@idiotchess fen```\nThis gives you the chess FEN code for the current board setup, and who plays next.';
+                + '\n> `@'+botname+' play @Topalov fen rnbqkbnr/pp1ppppp/8/2p5/4P3/8/PPPP1PPP/RNBQKBNR w KQkq c6 0 2`'
+                + '\n\n' + 'Whilst playing you can save the game using the `fen` command, and continue it later:\n> ```@'+botname+' fen```\nThis gives you the chess FEN code for the current board setup, and who plays next.';
             const helpText2 = 
-                'While in play:\n\n> `@diotchess board`\n> `@idiotchess select <piece>`\n> `@idiotchess info [<piece>]`\n> `@idiotchess move <piece ref>`';
+                'While in play:\n\n> `@'+botname+' board`\n> `@'+botname+' select <piece>`\n> `@'+botname+' info [<piece>]`\n> `@'+botname+' move <piece ref>`';
 
             const helpText3 = 
-                'Also:'+
-                + '\n\n> `@idiotchess play @<your friend> [timeout <number of mins. (default is one min)>] [fen <chess FEN mumbo jumbo here>]`'
-                + '\n\n> `@idiotbot get [<variable name>]`\n> `@idiotchess set <variable name> <value>`'                
+                'Also:'
+                + '\n\n> `@'+botname+' play @<your friend> [timeout <number of mins. (default is one min)>] [fen <chess FEN stuff here>]`'
+                + '\n\n> `@'+botname+' get [<variable name>]`\n> `@'+botname+' set <variable name> <value>`'
+                + '\n\n> `@'+botname+' set autoflip [true|false]`\n> `@'+botname+' set bigboard [true|false]`\n> `@'+botname+' set autoreact [true|false]`'
                 + '\n\nWith the variable `boardtype` it\'s possible for you to create your own emoji board...\n...*enjoy!*';
 
             var finalText = helpText1;
@@ -1777,14 +1793,14 @@ function processVerb(guildid, message, channelid, messageauthorid, gameKeysInThi
                 case '2':
                 case 'second':
                 case '2nd':
-                    finalText = [helpText1, helpText2, '@idiotchess `help third` for the next'].join('\n\n') + '\n\n';
+                    finalText = [helpText1, helpText2, '@'+botname+' `help third` for the next'].join('\n\n') + '\n\n';
                     break;
 
                 case '1':
                 case 'first':
                 case '1st':
                 default:
-                    finalText = [helpText1, '@idiotchess `help second` for the next'].join('\n\n') + '\n\n';
+                    finalText = [helpText1, '@'+botname+' `help second` for the next'].join('\n\n') + '\n\n';
                     break;
             }
             tellUser(guildid, channelid, messageauthorid, finalText, emoji_speakinghead, message )
@@ -2074,10 +2090,11 @@ function startBot() {
                     logger.info('Connected');
                     logger.info('Logged in as: ');
                     logger.info(bot.username + ' - (' + bot.id + ')');
+                    console.log(bot.id, bot);
 
                     bot.guilds.forEach(function (f) { repo.dbMakeDb(f.id); console.log('!ready:', f.id);});
                 } catch (err) {
-                    console.log('ready', err);
+                    console.log('ready err', err);
                 }
             });
 
@@ -2379,11 +2396,12 @@ function adminSpeak(bot, code, res, reqData) {
             + '</div></body></html>');
         return;
     }
+    const botname = bot.user.username;
 
     console.log('reqData.query.say', reqData.query.say);
     channel[0].send(reqData.query.say).catch(function (error) { debugDump(bot, reqData.query.channelid, error); });
     res.end('<html><body style="background-color:darkslategrey; color:burlywood"><div>' +
-        'WINNING' + ' idiotchess said ' + reqData.query.say
+        'WINNING' + ' '+botname+' said ' + reqData.query.say
         + '</div></body></html>');
 }
 
@@ -2425,6 +2443,10 @@ var htmlServerInterval = setInterval(function () {
 
                         case '/restartbot':
                             startBot();
+                            break;
+
+                        case '/poisen':
+                            process.exit(1);
                             break;
                     }
                 }

@@ -14,7 +14,7 @@ function dbMakeDb(guildid) {
 
 function dbGetGuildGame(guildid) {
     if (typeof guildid === 'undefined') throw 'no guildid';
-    if (!gamesMap.has(guildid)) throw 'unknown guildid ' + guildid;
+    if (!gamesMap.has(guildid)) { console.log('guild keys dump:', gamesMap.keys()); throw 'unknown guildid ' + guildid; }
     return gamesMap.get(guildid);
 }
 
