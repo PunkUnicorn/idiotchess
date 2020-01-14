@@ -552,19 +552,19 @@ function dbGetCustomDeck(guildid, userid, boardName) {
 
 //function dbGetSettingBigBoard() {
 
-const DEFAULT_BOARDSIZE = 'small';
+const DEFAULT_BIGBOARD = 'true';
 
 function dbGetSettingBigBoard(guildid) {
     if (!settingsMap.has(guildid)) {
         if (hasGuildSettingsOnDisk(guildid)) {
             dbMakeGuildSettingsDb(guildid);
         } else {
-            return DEFAULT_BOARDSIZE;
+            return DEFAULT_BIGBOARD;
         }
     }
     const first = (dbGetGuildSettings(guildid))().first();
     if (typeof first.bigboard === 'undefined' || first.bigboard === null) {
-        return DEFAULT_BOARDSIZE;
+        return DEFAULT_BIGBOARD;
     }
 
     if (first.length > 5) return false; //quick check before a JSON.parse
@@ -576,12 +576,12 @@ function dbGetGuildSettingBigBoard(guildid) {
         if (hasGuildSettingsOnDisk(guildid)) {
             dbMakeGuildSettingsDb(guildid);
         } else {
-            return DEFAULT_BOARDSIZE;
+            return DEFAULT_BIGBOARD;
         }
     }
     const first = (dbGetGuildSettings(guildid))().first();
     if (typeof first.bigboard === 'undefined' || first.bigboard === null) {
-        return DEFAULT_BOARDSIZE;
+        return DEFAULT_BIGBOARD;
     }
 
     if (first.length > 5) return false; //quick check before a JSON.parse
