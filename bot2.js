@@ -1,4 +1,4 @@
-﻿const repo = require('./libOldBookRepository.js');
+﻿const repo = require('./libRepository.js');
 const logger = require('winston');
 const Chess = require('./chess.js').Chess;
 const chessy = require('./chessy.js')
@@ -1374,7 +1374,7 @@ jgs(______)(_______)(_______)(________)(________)(_________)
 
 */
 
-const parser = require('./libParseTheMessageOnTheLeftHandSide.js');
+const parser = require('./libParseMessage.js');
 const https = require("https");
 
 
