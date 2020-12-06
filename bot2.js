@@ -133,12 +133,14 @@ function reOpenGameNegociation(guildid, message, channelid, messageauthorid, tar
 }
 
 function openGameNegociation(guildid, message, channelid, messageauthorid, targetid, invitetimeoutmins, iswhite, fenStuff, pgnStuff) {
-    var targetname = message.channel.guild.members.find(f => f.id === targetid).nickname;
+    const targetuser = message.channel.guild.members.find(f => f.id === targetid);
+    var targetname = targetuser === null ? null : targetuser.nickname;
     targetname = targetname === null
         ? message.channel.guild.members.find(f => f.id === targetid).user.username
         : targetname;
 
-    var authorname = message.channel.guild.members.find(f => f.id === messageauthorid).nickname;
+    var authoruser = message.channel.guild.members.find(f => f.id === messageauthorid);
+    var authorname = authoruser === null ? null : authoruser.nickname;
     authorname = authorname === null
         ? message.channel.guild.members.find(f => f.id === messageauthorid).user.username
         : authorname;
