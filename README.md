@@ -28,5 +28,7 @@ This also exposes a management console on port 8081 but it's not written yet. Th
 Discord bot, idiotchess - chess using: 
 
 ## chess.js
+# https://github.com/jhlywa/chess.js/blob/master/README.md
 ## chessy.js
+# https://github.com/lropero/chessy.js
 
